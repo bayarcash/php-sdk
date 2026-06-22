@@ -2,6 +2,18 @@
 
 All notable changes to will be documented in this file.
 
+## 2.2.0 - 2026-06-22
+### Added
+- Boost recurring payment support (v3 only):
+  - Customers: `createCustomer`, `getCustomers`, `getCustomer`, `createCustomerPaymentMethod`
+  - Plans: `createPlan`, `getPlans`, `getPlan`, `updatePlan`
+  - Subscriptions: `createSubscription`, `getSubscriptions`, `getSubscription`, `updateSubscription`, `getSubscriptionPayments`, plus `pauseSubscription`/`resumeSubscription`/`cancelSubscription`/`terminateSubscription`
+  - Installments: `createInstallment`, `getInstallments`, `getInstallment`, `updateInstallment`, `getInstallmentPayments`, plus `pauseInstallment`/`resumeInstallment`/`cancelInstallment`/`terminateInstallment`
+  - On-demand payments: `createOnDemandPayment`, `getPayment`
+  - `BoostRecurring` status/type/interval constants and label helpers
+- HTTP layer: `PATCH` verb, per-request headers (`Idempotency-Key`), and JSON request bodies.
+- First automated test suite (PHPUnit + Guzzle MockHandler).
+
 ## 2.1.2 - 2026-02-03
 ### Changed
 - Refactored checksum generation:

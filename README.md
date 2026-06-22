@@ -185,6 +185,71 @@ $response = $bayarcash->createFpxDirectDebitTerminationIntent($data);
 header("Location: " . $response->url); // redirect payer to Bayarcash Fpx Direct Debit termination page.
 ```
 
+## Boost Recurring Payments (V3 API only)
+
+> Requires `$bayarcash->setApiVersion('v3')`. Subscriptions, installments and on-demand
+> payments return a **recurring intent** with an authorization `url` — redirect the buyer
+> there to authorize their card, then fetch the resource by id once authorized.
+
+```php
+$bayarcash->setApiVersion('v3');
+
+// Customers
+$customer = $bayarcash->createCustomer([
+    'full_name' => 'Jane Doe',
+    'email'     => 'jane@example.com',
+    'phone'     => '60123456789',
+]);
+$customers = $bayarcash->getCustomers(['search' => 'jane', 'per_page' => 50]); // ['data','meta','links']
+$customer  = $bayarcash->getCustomer('bcus_xxx');
+$enroll    = $bayarcash->createCustomerPaymentMethod('bcus_xxx'); // ['payment_url' => ...]
+header('Location: ' . $enroll['payment_url']);
+
+// Plans
+$plan = $bayarcash->createPlan([
+    'name' => 'Pro', 'description' => 'Pro plan',
+    'price' => 49.90, 'currency' => 'MYR', 'interval' => 'P1M', // ISO-8601 duration
+]);
+$plan = $bayarcash->updatePlan('bpln_xxx', ['price' => 59.90]);
+
+// Subscriptions — returns a recurring intent (redirect the buyer to ->url)
+$intent = $bayarcash->createSubscription([
+    'customer_id' => 'bcus_xxx',          // or inline: 'customer' => ['full_name','email','phone']
+    'plan_id'     => 'bpln_xxx',
+    'start_date'  => '2026-07-01 00:00:00',
+    'callback_url'=> 'https://merchant/webhook',
+    'return_url'  => 'https://merchant/return',
+]);
+header('Location: ' . $intent->url);
+
+$subscription = $bayarcash->getSubscription('bsub_xxx'); // includes ->charges
+$bayarcash->pauseSubscription('bsub_xxx');
+$bayarcash->resumeSubscription('bsub_xxx');
+$bayarcash->cancelSubscription('bsub_xxx');
+
+// Installments — also returns a recurring intent
+$intent = $bayarcash->createInstallment([
+    'customer_id'       => 'bcus_xxx',
+    'total_amount'      => 1200.00,
+    'interval'          => 'P1M',
+    'installment_count' => 12,
+    'start_date'        => '2026-07-01 00:00:00',
+]);
+header('Location: ' . $intent->url);
+
+// On-demand payment — Idempotency-Key is REQUIRED (auto-generated if you omit it)
+$intent = $bayarcash->createOnDemandPayment([
+    'customer_id' => 'bcus_xxx',
+    'amount'      => 25.00,
+    'description' => 'Wallet top up',
+], 'your-idempotency-key');
+header('Location: ' . $intent->url);
+
+$payment = $bayarcash->getPayment('trx_xxx'); // status: succeeded|failed|processing|canceled
+```
+
+Status constants: `Webimpian\BayarcashSdk\BoostRecurring::STATUS_ACTIVE|STATUS_PAUSED|STATUS_CANCELED|STATUS_TERMINATED`.
+
 ## Security Recommendations
 
 1. Always use checksums for payment requests when possible
