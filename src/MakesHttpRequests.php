@@ -17,9 +17,9 @@ trait MakesHttpRequests
      * @param  string  $uri
      * @return mixed
      */
-    public function get($uri)
+    public function get($uri, array $headers = [])
     {
-        return $this->request('GET', $uri) ;
+        return $this->request('GET', $uri, [], $headers);
     }
 
     /**
@@ -28,11 +28,10 @@ trait MakesHttpRequests
      * @param  string  $uri
      * @return mixed
      */
-    public function post($uri, array $payload = [])
+    public function post($uri, array $payload = [], array $headers = [])
     {
-        return $this->request('POST', $uri, $payload) ;
+        return $this->request('POST', $uri, $payload, $headers);
     }
-
 
     /**
      * Make a PUT request to Bayarcash servers and return the response.
@@ -40,9 +39,20 @@ trait MakesHttpRequests
      * @param  string  $uri
      * @return mixed
      */
-    public function put($uri, array $payload = [])
+    public function put($uri, array $payload = [], array $headers = [])
     {
-        return $this->request('PUT', $uri, $payload) ;
+        return $this->request('PUT', $uri, $payload, $headers);
+    }
+
+    /**
+     * Make a PATCH request to Bayarcash servers and return the response.
+     *
+     * @param  string  $uri
+     * @return mixed
+     */
+    public function patch($uri, array $payload = [], array $headers = [])
+    {
+        return $this->request('PATCH', $uri, $payload, $headers);
     }
 
     /**
@@ -51,9 +61,9 @@ trait MakesHttpRequests
      * @param  string  $uri
      * @return mixed
      */
-    public function delete($uri, array $payload = [])
+    public function delete($uri, array $payload = [], array $headers = [])
     {
-        return $this->request('DELETE', $uri, $payload) ;
+        return $this->request('DELETE', $uri, $payload, $headers);
     }
 
     /**
@@ -64,15 +74,21 @@ trait MakesHttpRequests
      * @param array $payload
      * @return mixed|string
      */
-    protected function request($verb, $uri, array $payload = [])
+    protected function request($verb, $uri, array $payload = [], array $headers = [])
     {
+        $options = [];
+
         if (isset($payload['json'])) {
-            $payload = ['json' => $payload['json']];
-        } else {
-            $payload = empty($payload) ? [] : ['form_params' => $payload];
+            $options['json'] = $payload['json'];
+        } elseif (! empty($payload)) {
+            $options['form_params'] = $payload;
         }
 
-        $response = $this->guzzle->request($verb, $uri, $payload);
+        if (! empty($headers)) {
+            $options['headers'] = $headers;
+        }
+
+        $response = $this->guzzle->request($verb, $uri, $options);
 
         $statusCode = $response->getStatusCode();
 

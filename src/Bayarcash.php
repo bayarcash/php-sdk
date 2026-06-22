@@ -14,6 +14,7 @@ class Bayarcash
         Actions\CallbackVerifications,
         Actions\ChecksumGenerator,
         Actions\ManualBankTransfer,
+        Actions\RecurringPayments,
         MakesHttpRequests;
 
     /*
@@ -188,6 +189,16 @@ class Bayarcash
         $this->apiVersion = $version;
         $this->initializeGuzzle();
         return $this;
+    }
+
+    /**
+     * Get the current API version.
+     *
+     * @return string
+     */
+    public function getApiVersion()
+    {
+        return $this->apiVersion;
     }
 
     /**
