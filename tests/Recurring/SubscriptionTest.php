@@ -22,7 +22,7 @@ class SubscriptionTest extends TestCase
         $intent = $bayarcash->createSubscription([
             'customer_id' => 'bcus_1',
             'plan_id' => 'bpln_1',
-            'start_date' => '2026-07-01 00:00:00',
+            'start_date' => '2026-07-01T09:00:00+08:00',
             'callback_url' => 'https://m/cb',
             'return_url' => 'https://m/return',
         ]);
@@ -42,7 +42,7 @@ class SubscriptionTest extends TestCase
         $bayarcash->createSubscription([
             'customer' => ['full_name' => 'Jo', 'email' => 'jo@e.com', 'phone' => '011'],
             'plan_id' => 'bpln_1',
-            'start_date' => '2026-07-01 00:00:00',
+            'start_date' => '2026-07-01T09:00:00+08:00',
         ]);
 
         $this->assertSame('jo@e.com', $this->lastBody()['customer']['email']);

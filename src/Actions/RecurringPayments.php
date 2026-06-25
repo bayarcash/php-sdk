@@ -94,6 +94,11 @@ trait RecurringPayments
     // Subscriptions
     // ---------------------------------------------------------------------
 
+    /**
+     * @param  array  $data  Subscription payload. `start_date` must be a full
+     *                       ISO-8601 timestamp (e.g. "2026-07-01T09:00:00+08:00")
+     *                       at least 24 hours in the future — a bare date is rejected.
+     */
     public function createSubscription(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createSubscription');
@@ -160,6 +165,11 @@ trait RecurringPayments
     // Installments
     // ---------------------------------------------------------------------
 
+    /**
+     * @param  array  $data  Installment payload. `start_date` must be a full
+     *                       ISO-8601 timestamp (e.g. "2026-07-01T09:00:00+08:00")
+     *                       at least 24 hours in the future — a bare date is rejected.
+     */
     public function createInstallment(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createInstallment');

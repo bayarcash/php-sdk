@@ -24,7 +24,7 @@ class InstallmentTest extends TestCase
             'total_amount' => 1200.00,
             'interval' => 'P1M',
             'installment_count' => 12,
-            'start_date' => '2026-07-01 00:00:00',
+            'start_date' => '2026-07-01T09:00:00+08:00',
         ]);
 
         $this->assertInstanceOf(RecurringIntentResource::class, $intent);

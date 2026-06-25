@@ -216,7 +216,7 @@ $plan = $bayarcash->updatePlan('bpln_xxx', ['price' => 59.90]);
 $intent = $bayarcash->createSubscription([
     'customer_id' => 'bcus_xxx',          // or inline: 'customer' => ['full_name','email','phone']
     'plan_id'     => 'bpln_xxx',
-    'start_date'  => '2026-07-01 00:00:00',
+    'start_date'  => '2026-07-01T09:00:00+08:00', // ISO-8601 timestamp, at least 24h ahead
     'callback_url'=> 'https://merchant/webhook',
     'return_url'  => 'https://merchant/return',
 ]);
@@ -233,7 +233,7 @@ $intent = $bayarcash->createInstallment([
     'total_amount'      => 1200.00,
     'interval'          => 'P1M',
     'installment_count' => 12,
-    'start_date'        => '2026-07-01 00:00:00',
+    'start_date'        => '2026-07-01T09:00:00+08:00', // ISO-8601 timestamp, at least 24h ahead
 ]);
 header('Location: ' . $intent->url);
 
