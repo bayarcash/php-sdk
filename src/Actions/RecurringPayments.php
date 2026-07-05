@@ -261,6 +261,22 @@ trait RecurringPayments
         return new PaymentResource($this->get('payments/' . $paymentId), $this);
     }
 
+    /**
+     * Resolve a recurring intent (rint_...) to its current status/outcome.
+     *
+     * When a payer is redirected back after authorizing a subscription/installment or
+     * an on-demand charge, the only id you hold is the intent id (returned by
+     * createSubscription/createInstallment/createOnDemandPayment) — NOT a transaction
+     * id. Call this to verify the outcome instead of trusting redirect query params.
+     * The resource's `status` is one of: pending, authorizing, processing, completed, failed.
+     */
+    public function getRecurringIntent(string $intentId)
+    {
+        $this->ensureV3('getRecurringIntent');
+
+        return new RecurringIntentResource($this->get('recurring-intents/' . $intentId), $this);
+    }
+
     // ---------------------------------------------------------------------
     // Shared helpers
     // ---------------------------------------------------------------------

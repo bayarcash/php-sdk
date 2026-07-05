@@ -66,4 +66,25 @@ class OnDemandPaymentTest extends TestCase
         $this->assertSame('succeeded', $payment->status);
         $this->assertStringContainsString('payments/trx_9', (string) $this->lastRequest()->getUri());
     }
+
+    public function test_get_recurring_intent_resolves_status_by_intent_id(): void
+    {
+        $bayarcash = $this->sdk([
+            $this->json([
+                'type' => 'recurring_intent', 'id' => 'rint_9', 'recurring_type' => 'on_demand',
+                'status' => 'completed', 'amount' => 25.0, 'description' => 'Top up',
+                'url' => 'https://console/authorize/rint_9',
+            ]),
+        ]);
+
+        // At return time the merchant holds the intent id (rint_...), not a trx_ id.
+        $intent = $bayarcash->getRecurringIntent('rint_9');
+
+        $this->assertInstanceOf(RecurringIntentResource::class, $intent);
+        $this->assertSame('rint_9', $intent->id);
+        $this->assertSame('completed', $intent->status);
+        $this->assertSame('on_demand', $intent->recurringType);
+        $this->assertSame('GET', $this->lastRequest()->getMethod());
+        $this->assertStringContainsString('recurring-intents/rint_9', (string) $this->lastRequest()->getUri());
+    }
 }
