@@ -1,10 +1,10 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Actions;
+namespace Bayarcash\Actions;
 
-use Webimpian\BayarcashSdk\Resources\FpxDirectDebitApplicationResource;
-use Webimpian\BayarcashSdk\Resources\FpxDirectDebitResource;
-use Webimpian\BayarcashSdk\Resources\TransactionResource;
+use Bayarcash\Resources\FpxDirectDebitApplicationResource;
+use Bayarcash\Resources\FpxDirectDebitResource;
+use Bayarcash\Resources\TransactionResource;
 
 trait FpxDirectDebitPaymentIntent
 {

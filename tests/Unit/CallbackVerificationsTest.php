@@ -1,9 +1,9 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Tests\Unit;
+namespace Bayarcash\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Webimpian\BayarcashSdk\Bayarcash;
+use Bayarcash\Bayarcash;
 
 class CallbackVerificationsTest extends TestCase
 {

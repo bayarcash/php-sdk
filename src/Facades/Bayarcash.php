@@ -1,8 +1,8 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Facades;
+namespace Bayarcash\Facades;
 
-use Webimpian\BayarcashSdk\Bayarcash as BayarcashSdk;
+use Bayarcash\Bayarcash as BayarcashSdk;
 use Illuminate\Support\Facades\Facade;
 
 class Bayarcash extends Facade

@@ -56,7 +56,7 @@ You will need two credentials from your Bayarcash console:
 ### Plain PHP
 
 ```php
-use Webimpian\BayarcashSdk\Bayarcash;
+use Bayarcash\Bayarcash;
 
 $bayarcash = new Bayarcash('YOUR_API_TOKEN');
 $bayarcash->useSandbox(); // remove this line in production
@@ -74,7 +74,7 @@ BAYARCASH_API_SECRET_KEY=your_api_secret_key
 Then resolve the SDK from the container:
 
 ```php
-use Webimpian\BayarcashSdk\Bayarcash;
+use Bayarcash\Bayarcash;
 
 $bayarcash = app(Bayarcash::class);
 $bayarcash->useSandbox(); // remove this line in production
@@ -104,8 +104,8 @@ $bayarcash->getApiVersion(); // read back the current version
 A complete FPX payment flow, from creating the payment to verifying the result:
 
 ```php
-use Webimpian\BayarcashSdk\Bayarcash;
-use Webimpian\BayarcashSdk\Fpx;
+use Bayarcash\Bayarcash;
+use Bayarcash\Fpx;
 
 $bayarcash = new Bayarcash('YOUR_API_TOKEN');
 $bayarcash->useSandbox();
@@ -231,7 +231,7 @@ Each verifier returns `true` only when the checksum matches. See [FPX Direct Deb
 Transaction status is an integer code. Use the `Fpx` helper instead of hardcoding numbers:
 
 ```php
-use Webimpian\BayarcashSdk\Fpx;
+use Bayarcash\Fpx;
 
 Fpx::STATUS_NEW;        // 0
 Fpx::STATUS_PENDING;    // 1
@@ -285,7 +285,7 @@ $bayarcash->cancelPaymentIntent('payment_intent_id');
 FPX Direct Debit lets you set up a recurring mandate and later maintain or terminate it. Constants live on the `FpxDirectDebit` class:
 
 ```php
-use Webimpian\BayarcashSdk\FpxDirectDebit;
+use Bayarcash\FpxDirectDebit;
 
 // Payer ID type
 FpxDirectDebit::NRIC;                  // 1 (New IC)
@@ -392,7 +392,7 @@ $response = $bayarcash->createManualBankTransfer([
 Update the status of an existing transfer:
 
 ```php
-use Webimpian\BayarcashSdk\Fpx;
+use Bayarcash\Fpx;
 
 $bayarcash->updateManualBankTransferStatus(
     'ref_no_here',
@@ -419,10 +419,10 @@ $banks = $bayarcash->fpxBanksList();
 Failed API calls throw typed exceptions. Catch them to handle errors gracefully:
 
 ```php
-use Webimpian\BayarcashSdk\Exceptions\ValidationException;
-use Webimpian\BayarcashSdk\Exceptions\FailedActionException;
-use Webimpian\BayarcashSdk\Exceptions\NotFoundException;
-use Webimpian\BayarcashSdk\Exceptions\RateLimitExceededException;
+use Bayarcash\Exceptions\ValidationException;
+use Bayarcash\Exceptions\FailedActionException;
+use Bayarcash\Exceptions\NotFoundException;
+use Bayarcash\Exceptions\RateLimitExceededException;
 
 try {
     $paymentIntent = $bayarcash->createPaymentIntent($data);

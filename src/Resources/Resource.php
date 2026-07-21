@@ -1,8 +1,8 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Resources;
+namespace Bayarcash\Resources;
 
-use Webimpian\BayarcashSdk\Bayarcash;
+use Bayarcash\Bayarcash;
 
 #[\AllowDynamicProperties]
 class Resource
@@ -10,7 +10,7 @@ class Resource
     /**
      * The Bayarcash SDK instance.
      *
-     * @var \Webimpian\BayarcashSdk\Bayarcash|null
+     * @var \Bayarcash\Bayarcash|null
      */
     protected $bayarcash;
 

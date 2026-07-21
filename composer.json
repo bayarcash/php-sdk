@@ -14,22 +14,22 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Webimpian\\BayarcashSdk\\BayarcashSdkServiceProvider"
+                "Bayarcash\\BayarcashSdkServiceProvider"
             ],
             "alias": {
-                "BayarcashSdk": "Webimpian\\BayarcashSdk\\Facades\\Bayarcash"
+                "BayarcashSdk": "Bayarcash\\Facades\\Bayarcash"
             }
         }
     },
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Webimpian\\BayarcashSdk\\": "src/"
+            "Bayarcash\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Webimpian\\BayarcashSdk\\Tests\\": "tests/"
+            "Bayarcash\\Tests\\": "tests/"
         }
     },
     "scripts": {

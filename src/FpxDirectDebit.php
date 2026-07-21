@@ -1,6 +1,6 @@
 <?php
 
-namespace Webimpian\BayarcashSdk;
+namespace Bayarcash;
 
 class FpxDirectDebit
 {

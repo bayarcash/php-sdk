@@ -2,6 +2,10 @@
 
 All notable changes to will be documented in this file.
 
+## 3.0.0 - 2026-07-22
+### Changed
+- **Breaking:** Renamed the root namespace from `Webimpian\BayarcashSdk` to `Bayarcash`. Update your imports — e.g. `use Bayarcash\Bayarcash;`, `use Bayarcash\Fpx;`, `use Bayarcash\FpxDirectDebit;`. The package name (`bayarcash/php-sdk`) and the public API are otherwise unchanged.
+
 ## 2.3.0 - 2026-07-22
 ### Added
 - Support for PHP 8.3, 8.4, and 8.5. The SDK now runs on PHP 7.4 through 8.5.

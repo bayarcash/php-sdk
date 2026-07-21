@@ -1,6 +1,6 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Actions;
+namespace Bayarcash\Actions;
 
 trait ChecksumGenerator
 {

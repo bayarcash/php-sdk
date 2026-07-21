@@ -1,6 +1,6 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Exceptions;
+namespace Bayarcash\Exceptions;
 
 class RateLimitExceededException extends \Exception
 {

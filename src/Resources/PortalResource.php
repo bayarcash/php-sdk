@@ -1,6 +1,6 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Resources;
+namespace Bayarcash\Resources;
 
 class PortalResource extends Resource
 {

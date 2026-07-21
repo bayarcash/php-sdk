@@ -1,6 +1,6 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\DuitNow;
+namespace Bayarcash\DuitNow;
 
 class Dobw
 {

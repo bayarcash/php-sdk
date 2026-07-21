@@ -1,12 +1,12 @@
 <?php
 
-namespace Webimpian\BayarcashSdk;
+namespace Bayarcash;
 
 use GuzzleHttp\Client as HttpClient;
-use Webimpian\BayarcashSdk\Resources\FpxBankResource;
-use Webimpian\BayarcashSdk\Resources\PortalResource;
-use Webimpian\BayarcashSdk\Resources\PaymentIntentResource;
-use Webimpian\BayarcashSdk\Resources\TransactionResource;
+use Bayarcash\Resources\FpxBankResource;
+use Bayarcash\Resources\PortalResource;
+use Bayarcash\Resources\PaymentIntentResource;
+use Bayarcash\Resources\TransactionResource;
 
 class Bayarcash
 {
@@ -269,7 +269,7 @@ class Bayarcash
      * Create a new payment intent.
      *
      * @param  array  $data
-     * @return \Webimpian\BayarcashSdk\Resources\PaymentIntentResource
+     * @return \Bayarcash\Resources\PaymentIntentResource
      */
     public function createPaymentIntent(array $data)
     {
@@ -283,7 +283,7 @@ class Bayarcash
      * Get transaction details.
      *
      * @param  string  $id
-     * @return \Webimpian\BayarcashSdk\Resources\TransactionResource
+     * @return \Bayarcash\Resources\TransactionResource
      */
     public function getTransaction($id)
     {
@@ -297,7 +297,7 @@ class Bayarcash
      * Get payment intent by ID.
      *
      * @param  string  $paymentIntentId
-     * @return \Webimpian\BayarcashSdk\Resources\PaymentIntentResource
+     * @return \Bayarcash\Resources\PaymentIntentResource
      * @throws \Exception If the API version is not v3
      */
     public function getPaymentIntent(string $paymentIntentId)
@@ -317,7 +317,7 @@ class Bayarcash
 	 * Cancel payment intent.
 	 *
 	 * @param  string  $paymentIntentId
-	 * @return \Webimpian\BayarcashSdk\Resources\PaymentIntentResource
+	 * @return \Bayarcash\Resources\PaymentIntentResource
 	 * @throws \Exception If the API version is not v3
 	 */
 	public function cancelPaymentIntent(string $paymentIntentId)
@@ -468,7 +468,7 @@ class Bayarcash
      * Get transaction by exchange reference number.
      *
      * @param  string  $referenceNumber
-     * @return \Webimpian\BayarcashSdk\Resources\TransactionResource|null
+     * @return \Bayarcash\Resources\TransactionResource|null
      * @throws \Exception If the API version is not v3
      */
     public function getTransactionByReferenceNumber(string $referenceNumber)

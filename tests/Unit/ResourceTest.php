@@ -1,11 +1,11 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Tests\Unit;
+namespace Bayarcash\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Webimpian\BayarcashSdk\Resources\PaymentIntentResource;
-use Webimpian\BayarcashSdk\Resources\PortalResource;
-use Webimpian\BayarcashSdk\Resources\TransactionResource;
+use Bayarcash\Resources\PaymentIntentResource;
+use Bayarcash\Resources\PortalResource;
+use Bayarcash\Resources\TransactionResource;
 
 class ResourceTest extends TestCase
 {

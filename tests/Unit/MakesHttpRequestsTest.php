@@ -1,17 +1,17 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Tests\Unit;
+namespace Bayarcash\Tests\Unit;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
-use Webimpian\BayarcashSdk\Bayarcash;
-use Webimpian\BayarcashSdk\Exceptions\FailedActionException;
-use Webimpian\BayarcashSdk\Exceptions\NotFoundException;
-use Webimpian\BayarcashSdk\Exceptions\RateLimitExceededException;
-use Webimpian\BayarcashSdk\Exceptions\ValidationException;
+use Bayarcash\Bayarcash;
+use Bayarcash\Exceptions\FailedActionException;
+use Bayarcash\Exceptions\NotFoundException;
+use Bayarcash\Exceptions\RateLimitExceededException;
+use Bayarcash\Exceptions\ValidationException;
 
 class MakesHttpRequestsTest extends TestCase
 {
