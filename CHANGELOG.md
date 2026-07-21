@@ -2,6 +2,26 @@
 
 All notable changes to will be documented in this file.
 
+## 2.3.0 - 2026-07-22
+### Added
+- Support for PHP 8.3, 8.4, and 8.5. The SDK now runs on PHP 7.4 through 8.5.
+- `getApiVersion()`, a companion to the existing `setApiVersion()`, to read back the API version currently in use.
+- `getFpxDirectDebitTransaction()` to retrieve an FPX Direct Debit transaction. The previous, misspelled `getfpxDirectDebitransaction()` still works but is now deprecated.
+- A full integration guide in the README: setup, an end-to-end payment example, request field references, callback handling, Direct Debit, Manual Bank Transfer, error handling, and status constants.
+
+### Fixed
+- FPX Direct Debit authorization callbacks are now verified correctly; valid callbacks could previously be rejected.
+- Payment, transaction, portal, and Direct Debit response objects no longer error when the API omits an optional field — missing values are returned as `null`.
+- Requests that fail with a `400` response now throw a `FailedActionException` with the error message, instead of a fatal error.
+- Callback verification no longer produces PHP warnings when a callback payload is incomplete.
+
+### Security
+- Strengthened payment callback verification against timing attacks.
+
+## 2.2.0 - 2026-07-21
+### Changed
+- Renamed the package to `bayarcash/php-sdk` (previously `webimpian/bayarcash-php-sdk`). Existing installations using the old name continue to work.
+
 ## 2.1.2 - 2026-02-03
 ### Changed
 - Refactored checksum generation:

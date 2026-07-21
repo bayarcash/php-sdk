@@ -191,6 +191,16 @@ class Bayarcash
     }
 
     /**
+     * Get the API version currently in use.
+     *
+     * @return string
+     */
+    public function getApiVersion()
+    {
+        return $this->apiVersion;
+    }
+
+    /**
      * Get the base URI based on the API version and environment.
      *
      * @return string
@@ -313,7 +323,7 @@ class Bayarcash
 	public function cancelPaymentIntent(string $paymentIntentId)
 	{
 		if ($this->apiVersion !== 'v3') {
-			throw new \Exception('The getPaymentIntent method is only available for API version v3.');
+			throw new \Exception('The cancelPaymentIntent method is only available for API version v3.');
 		}
 
 		return new PaymentIntentResource(

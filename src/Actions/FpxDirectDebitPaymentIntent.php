@@ -32,11 +32,20 @@ trait FpxDirectDebitPaymentIntent
         );
     }
 
-    public function getfpxDirectDebitransaction($id)
+    public function getFpxDirectDebitTransaction($id)
     {
         return new TransactionResource(
             $this->get('mandates/transactions/' . $id),
+            $this
         );
+    }
+
+    /**
+     * @deprecated Misspelled alias, kept for backward compatibility. Use getFpxDirectDebitTransaction().
+     */
+    public function getfpxDirectDebitransaction($id)
+    {
+        return $this->getFpxDirectDebitTransaction($id);
     }
 
     public function getFpxDirectDebit($id)

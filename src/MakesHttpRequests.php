@@ -105,7 +105,18 @@ trait MakesHttpRequests
         }
 
         if ($response->getStatusCode() == 400) {
-            throw new FailedActionException(json_decode((string) $response->getBody()));
+            $rawBody = (string) $response->getBody();
+            $decoded = json_decode($rawBody, true);
+
+            $message = $rawBody;
+            if (is_array($decoded)) {
+                $message = $decoded['message'] ?? $decoded['error'] ?? $rawBody;
+                if (is_array($message)) {
+                    $message = json_encode($message);
+                }
+            }
+
+            throw new FailedActionException($message);
         }
 
         if ($response->getStatusCode() == 429) {

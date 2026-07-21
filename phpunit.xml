@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Minimal config kept compatible with both PHPUnit 9.x (PHP 7.4/8.0) and 10.x (PHP 8.1+). -->
+<phpunit bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnWarning="true">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

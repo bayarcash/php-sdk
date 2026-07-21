@@ -42,7 +42,7 @@ trait ChecksumGenerator
 	    return hash_hmac('sha256', $payloadString, $secretKey);
     }
 
-    public function createFpxDIrectDebitEnrolmentChecksumValue($secretKey, $data)
+    public function createFpxDirectDebitEnrolmentChecksumValue($secretKey, $data)
     {
         $payload = [
             'order_number' => $data['order_number'],
@@ -62,7 +62,7 @@ trait ChecksumGenerator
         return hash_hmac('sha256', $payloadString, $secretKey);
     }
 
-    public function createFpxDIrectDebitMaintenanceChecksumValue($secretKey, $data)
+    public function createFpxDirectDebitMaintenanceChecksumValue($secretKey, $data)
     {
         $payload = [
             'amount' => $data['amount'],

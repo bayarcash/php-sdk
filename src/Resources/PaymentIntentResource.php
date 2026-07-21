@@ -4,19 +4,18 @@ namespace Webimpian\BayarcashSdk\Resources;
 
 class PaymentIntentResource extends Resource
 {
+    public ?string $payerName = null;
+    public ?string $payerEmail = null;
+    public ?string $payerTelephoneNumber = null;
+    public ?string $orderNumber = null;
+    public ?float $amount = null;
+    public ?string $url = null;
 
-    public string $payerName;
-    public string $payerEmail;
-    public ?string $payerTelephoneNumber;
-    public string $orderNumber;
-    public float $amount;
-    public ?string $url;
-
-    public string $type;
-    public string $id;
-    public string $status;
-    public $lastAttempt; 
-    public ?string $paidAt;
-    public string $currency;
-    public array $attempts;
+    public ?string $type = null;
+    public ?string $id = null;
+    public ?string $status = null;
+    public $lastAttempt = null;
+    public ?string $paidAt = null;
+    public ?string $currency = null;
+    public ?array $attempts = null;
 }
