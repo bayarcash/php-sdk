@@ -2,6 +2,7 @@
 
 [![Latest Stable Version](https://img.shields.io/packagist/v/bayarcash/php-sdk.svg)](https://packagist.org/packages/bayarcash/php-sdk)
 [![Total Downloads](https://img.shields.io/packagist/dt/bayarcash/php-sdk.svg)](https://packagist.org/packages/bayarcash/php-sdk)
+[![Downloads (legacy)](https://img.shields.io/packagist/dt/webimpian/bayarcash-php-sdk.svg?label=downloads%20%28legacy%29)](https://packagist.org/packages/webimpian/bayarcash-php-sdk)
 [![PHP Version Require](https://img.shields.io/packagist/php-v/bayarcash/php-sdk.svg)](https://packagist.org/packages/bayarcash/php-sdk)
 [![License](https://img.shields.io/packagist/l/bayarcash/php-sdk.svg)](https://packagist.org/packages/bayarcash/php-sdk)
 
