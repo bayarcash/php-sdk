@@ -32,7 +32,7 @@ The [Bayarcash](https://bayarcash.com/) SDK provides an expressive interface for
 
 ## Requirements
 
-- PHP 7.4 – 8.5
+- **PHP 7.4 – 8.5.** The `php ^7.4|^8.0` badge reflects the Composer constraint: `^7.4` covers PHP 7.4.x, and `^8.0` covers every 8.x release (8.0 through 8.5, up to but not including 9.0).
 - `ext-json`
 - Guzzle 7 (installed automatically)
 
