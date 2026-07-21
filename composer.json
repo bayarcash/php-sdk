@@ -1,7 +1,6 @@
 {
-    "name": "webimpian/bayarcash-php-sdk",
+    "name": "bayarcash/php-sdk",
     "description": "Bayarcash payment gateway PHP Sdk.",
-    "version": "2.1.2",
     "type": "sdk",
     "require": {
         "guzzlehttp/guzzle": "^7.0",
