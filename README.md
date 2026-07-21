@@ -11,8 +11,10 @@ The [Bayarcash](https://bayarcash.com/) SDK provides an expressive interface for
 To install the SDK in your project you need to require the package via composer:
 
 ```bash
-composer require webimpian/bayarcash-php-sdk
+composer require bayarcash/php-sdk
 ```
+
+> **Note:** This package was previously published as `webimpian/bayarcash-php-sdk`. Existing installations using the old name continue to work, but new integrations should use `bayarcash/php-sdk`.
 
 ### Basic Usage
 
