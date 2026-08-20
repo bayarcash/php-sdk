@@ -7,6 +7,7 @@ use Bayarcash\Resources\FpxBankResource;
 use Bayarcash\Resources\PortalResource;
 use Bayarcash\Resources\PaymentIntentResource;
 use Bayarcash\Resources\TransactionResource;
+use Bayarcash\Resources\DuitNowQrResource;
 
 class Bayarcash
 {
@@ -38,7 +39,9 @@ class Bayarcash
     const BOOST_WALLET = 17;
     const GRABPAY = 18;
     const GRABPL = 19;
+    const SHOPBACK_BNPL = 20;
     const SHOPEE_PAY = 21;
+    const FPX_B2B = 23;
 
     /**
      * The Bayarcash API Key.
@@ -219,6 +222,18 @@ class Bayarcash
     }
 
     /**
+     * Get the API server status.
+     *
+     * @return mixed
+     */
+    public function getServerStatus()
+    {
+        $this->assertV3('The getServerStatus method');
+
+        return $this->get('up');
+    }
+
+    /**
      * Get list of FPX banks.
      *
      * @return array
@@ -227,6 +242,21 @@ class Bayarcash
     {
         return $this->transformCollection(
             $this->get('banks'),
+            FpxBankResource::class
+        );
+    }
+
+    /**
+     * Get list of DuitNow DOBW banks.
+     *
+     * @return array
+     */
+    public function duitNowDobwBanksList()
+    {
+        $this->assertV3('The duitNowDobwBanksList method');
+
+        return $this->transformCollection(
+            $this->get('duitnow/dobw/banks'),
             FpxBankResource::class
         );
     }
@@ -266,17 +296,69 @@ class Bayarcash
     }
 
     /**
+     * Get a single portal by ID.
+     *
+     * @param  string  $portalId
+     * @return \Bayarcash\Resources\PortalResource
+     */
+    public function getPortal(string $portalId)
+    {
+        $this->assertV3('The getPortal method');
+
+        return new PortalResource(
+            $this->get('portals/' . $portalId),
+            $this
+        );
+    }
+
+    /**
      * Create a new payment intent.
      *
      * @param  array  $data
+     * @param  string|null  $idempotencyKey  Optional v3 Idempotency-Key (max 255 chars).
      * @return \Bayarcash\Resources\PaymentIntentResource
      */
-    public function createPaymentIntent(array $data)
+    public function createPaymentIntent(array $data, ?string $idempotencyKey = null)
     {
+        if ($idempotencyKey !== null) {
+            $this->assertV3('The Idempotency-Key header');
+        }
+
         return new PaymentIntentResource(
-            $this->post('payment-intents', $data),
+            $this->post('payment-intents', $data, $this->idempotencyHeader($idempotencyKey)),
             $this
         );
+    }
+
+    /**
+     * Create a payment intent and generate its DuitNow QR in one request.
+     *
+     * Requires a single DuitNow QR channel; the QR is returned on the `duitnowQr` property.
+     *
+     * @return \Bayarcash\Resources\PaymentIntentResource
+     */
+    public function createDuitNowQrPaymentIntent(array $data, ?string $idempotencyKey = null)
+    {
+        $this->assertV3('The createDuitNowQrPaymentIntent method');
+
+        $data['generate_qr'] = true;
+
+        return new PaymentIntentResource(
+            $this->post('payment-intents', $data, $this->idempotencyHeader($idempotencyKey)),
+            $this
+        );
+    }
+
+    protected function assertV3(string $feature): void
+    {
+        if ($this->apiVersion !== 'v3') {
+            throw new \Exception("{$feature} is only available for API version v3.");
+        }
+    }
+
+    private function idempotencyHeader(?string $key): array
+    {
+        return $key === null ? [] : ['Idempotency-Key' => $key];
     }
 
     /**
@@ -331,6 +413,37 @@ class Bayarcash
 			$this
 		);
 	}
+
+    /**
+     * Regenerate the DuitNow QR for an existing DuitNow-QR payment intent.
+     *
+     * Re-serves the active QR while one is still valid; issues a fresh QR once it expires.
+     *
+     * @param  string  $paymentIntentId
+     * @return \Bayarcash\Resources\DuitNowQrResource
+     */
+    public function regenerateDuitNowQr(string $paymentIntentId)
+    {
+        $this->assertV3('The regenerateDuitNowQr method');
+
+        return new DuitNowQrResource(
+            $this->post('payment-intents/' . $paymentIntentId . '/duitnow-qr'),
+            $this
+        );
+    }
+
+    /**
+     * Poll the payment status of a DuitNow QR transaction.
+     *
+     * @param  string  $transactionId
+     * @return array
+     */
+    public function getDuitNowQrStatus(string $transactionId)
+    {
+        $this->assertV3('The getDuitNowQrStatus method');
+
+        return $this->get('transactions/' . $transactionId . '/duitnow-qr/status');
+    }
 
     /**
      * Get all transactions with optional filters.

@@ -28,9 +28,9 @@ trait MakesHttpRequests
      * @param  string  $uri
      * @return mixed
      */
-    public function post($uri, array $payload = [])
+    public function post($uri, array $payload = [], array $headers = [])
     {
-        return $this->request('POST', $uri, $payload) ;
+        return $this->request('POST', $uri, $payload, $headers) ;
     }
 
 
@@ -57,22 +57,40 @@ trait MakesHttpRequests
     }
 
     /**
+     * Make a PATCH request to Bayarcash servers and return the response.
+     *
+     * @param  string  $uri
+     * @return mixed
+     */
+    public function patch($uri, array $payload = [])
+    {
+        return $this->request('PATCH', $uri, $payload) ;
+    }
+
+    /**
      * Make request to Bayarcash servers and return the response.
      *
      * @param $verb
      * @param $uri
      * @param array $payload
+     * @param array $headers
      * @return mixed|string
      */
-    protected function request($verb, $uri, array $payload = [])
+    protected function request($verb, $uri, array $payload = [], array $headers = [])
     {
+        $options = [];
+
         if (isset($payload['json'])) {
-            $payload = ['json' => $payload['json']];
-        } else {
-            $payload = empty($payload) ? [] : ['form_params' => $payload];
+            $options['json'] = $payload['json'];
+        } elseif (! empty($payload)) {
+            $options['form_params'] = $payload;
         }
 
-        $response = $this->guzzle->request($verb, $uri, $payload);
+        if (! empty($headers)) {
+            $options['headers'] = $headers;
+        }
+
+        $response = $this->guzzle->request($verb, $uri, $options);
 
         $statusCode = $response->getStatusCode();
 

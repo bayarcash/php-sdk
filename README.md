@@ -6,7 +6,7 @@
 [![PHP Version Require](https://img.shields.io/packagist/php-v/bayarcash/php-sdk.svg)](https://packagist.org/packages/bayarcash/php-sdk)
 [![License](https://img.shields.io/packagist/l/bayarcash/php-sdk.svg)](https://packagist.org/packages/bayarcash/php-sdk)
 
-The [Bayarcash](https://bayarcash.com/) SDK provides an expressive interface for interacting with Bayarcash's Payment Gateway API. It supports both API **v2** (default) and **v3**, with additional query features available in v3.
+The [Bayarcash](https://bayarcash.com/) SDK provides an expressive interface for interacting with Bayarcash's Payment Gateway API. It supports both API **v2** (default) and **v3**, with additional features available in v3.
 
 ## Table of Contents
 
@@ -18,10 +18,11 @@ The [Bayarcash](https://bayarcash.com/) SDK provides an expressive interface for
   - [Configuration](#configuration)
 - [Quick Start: Accept a Payment](#quick-start-accept-a-payment)
 - [Payment Channels](#payment-channels)
-- [Creating a Payment Intent](#creating-a-payment-intent)
+- [Payment Intents](#payment-intents)
 - [Handling Callbacks](#handling-callbacks)
 - [Payment & Transaction Status](#payment--transaction-status)
 - [Transactions](#transactions)
+- [DuitNow QR](#duitnow-qr)
 - [FPX Direct Debit](#fpx-direct-debit)
 - [Manual Bank Transfer](#manual-bank-transfer)
 - [Portals & FPX Banks](#portals--fpx-banks)
@@ -161,10 +162,14 @@ Bayarcash::TOUCH_N_GO          // Touch 'n Go eWallet
 Bayarcash::BOOST_WALLET        // Boost Wallet
 Bayarcash::GRABPAY             // GrabPay
 Bayarcash::GRABPL              // Grab PayLater
+Bayarcash::SHOPBACK_BNPL       // ShopBack BNPL
 Bayarcash::SHOPEE_PAY          // ShopeePay
+Bayarcash::FPX_B2B             // FPX B2B
 ```
 
-## Creating a Payment Intent
+## Payment Intents
+
+Create a payment intent, then retrieve or cancel it later.
 
 ```php
 $paymentIntent = $bayarcash->createPaymentIntent($data);
@@ -195,6 +200,39 @@ $data['checksum'] = $bayarcash->createPaymentIntentChecksumValue($apiSecretKey, 
 ```
 
 The checksum is computed from `payment_channel`, `order_number`, `amount`, `payer_name`, and `payer_email`.
+
+### Idempotency (v3)
+
+Pass a unique key (UUID v4) as the second argument to make a create safe to retry — a
+timed-out request can be re-sent with the same key without creating a duplicate intent:
+
+```php
+$paymentIntent = $bayarcash->createPaymentIntent($data, $idempotencyKey);
+```
+
+Keys are scoped per portal and expire after 24 hours.
+
+### Payer identity verification (v3)
+
+For a single FPX (`Bayarcash::FPX`) or FPX B2B (`Bayarcash::FPX_B2B`) intent, set
+`verify_identity` and add the payer's bank account number (`fpx_eaccount_number`) and ID —
+NRIC, passport, or business registration number (`fpx_ebuyer_id`):
+
+```php
+$data['verify_identity']     = true;
+$data['fpx_eaccount_number'] = '1234567890';
+$data['fpx_ebuyer_id']       = '900101011234';
+```
+
+The result comes back on the transaction as `payerIdentityVerified` (`true`/`false`/`null`)
+and `fpxExtraInfo` (`account_type`, `account_number_verified`, `buyer_id_verified`).
+
+### Retrieve or cancel (v3)
+
+```php
+$intent = $bayarcash->getPaymentIntent('payment_intent_id');
+$bayarcash->cancelPaymentIntent('payment_intent_id');
+```
 
 ## Handling Callbacks
 
@@ -272,13 +310,50 @@ $byEmail   = $bayarcash->getTransactionsByPayerEmail('ahmad@example.com');
 $byStatus  = $bayarcash->getTransactionsByStatus('3');
 $byChannel = $bayarcash->getTransactionsByPaymentChannel(Bayarcash::FPX);
 $byRef     = $bayarcash->getTransactionByReferenceNumber('REF123'); // single or null
-
-// Get a payment intent by id (v3 only)
-$intent = $bayarcash->getPaymentIntent('payment_intent_id');
-
-// Cancel a payment intent (v3 only)
-$bayarcash->cancelPaymentIntent('payment_intent_id');
 ```
+
+## DuitNow QR
+
+Render a DuitNow QR on your **own** page instead of redirecting the payer to Bayarcash. Requires a single DuitNow QR channel and API v3.
+
+**1. Generate the QR while creating the intent** (one step):
+
+```php
+$intent = $bayarcash->createDuitNowQrPaymentIntent([
+    'portal_key'      => 'your_portal_key',
+    'payment_channel' => Bayarcash::DUITNOW_QR,
+    'order_number'    => 'ORD001',
+    'amount'          => '100.00',
+    'payer_name'      => 'MOHD ALI',
+    'payer_email'     => 'm.ali@gmail.com',
+]);
+
+$qr = $intent->duitnowQr;
+```
+
+**2. Poll the payment status** while the payer scans:
+
+```php
+$status = $bayarcash->getDuitNowQrStatus($qr->transactionId);
+```
+
+**3. Regenerate** a fresh QR for an existing intent (e.g. after the previous one expired):
+
+```php
+$qr = $bayarcash->regenerateDuitNowQr($paymentIntentId);
+```
+
+Both `$intent->duitnowQr` and `regenerateDuitNowQr()` return a `DuitNowQrResource`:
+
+| Property | Description |
+|---|---|
+| `qrImage` | PNG data URI — drop straight into an `<img>`. |
+| `qrString` | Raw QR payload, if you render it yourself. |
+| `qrExpiresAt` | When the QR expires. |
+| `transactionId` | Use it to poll the status. |
+| `pollUrl` | Full status URL, if you prefer to poll it directly. |
+
+> Webhooks to your `callback_url` are the primary notification path — polling is only a fallback. Respect `next_poll_after_ms` between polls and stop once the QR expires.
 
 ## FPX Direct Debit
 
@@ -360,6 +435,12 @@ header('Location: ' . $mandate->url);
 $mandate     = $bayarcash->getFpxDirectDebit($mandateId);
 $transaction = $bayarcash->getFpxDirectDebitTransaction($transactionId);
 
+$mandates     = $bayarcash->getAllFpxDirectDebits();
+$transactions = $bayarcash->getAllFpxDirectDebitTransactions();
+
+$bayarcash->deactivateFpxDirectDebit($mandateId);
+$bayarcash->activateFpxDirectDebit($mandateId);
+
 // Mandate callback verifiers
 $bayarcash->verifyDirectDebitBankApprovalCallbackData($callbackData, $apiSecretKey);
 $bayarcash->verifyDirectDebitAuthorizationCallbackData($callbackData, $apiSecretKey);
@@ -404,14 +485,14 @@ $bayarcash->updateManualBankTransferStatus(
 ## Portals & FPX Banks
 
 ```php
-// All portals for your account
-$portals = $bayarcash->getPortals();
+$portals   = $bayarcash->getPortals();
+$portal    = $bayarcash->getPortal('portal_id');
+$channels  = $bayarcash->getChannels('your_portal_key');
 
-// Payment channels available for a portal
-$channels = $bayarcash->getChannels('your_portal_key');
+$banks     = $bayarcash->fpxBanksList();
+$dobwBanks = $bayarcash->duitNowDobwBanksList();
 
-// FPX banks (for building a bank selector)
-$banks = $bayarcash->fpxBanksList();
+$status    = $bayarcash->getServerStatus();
 ```
 
 ## Error Handling

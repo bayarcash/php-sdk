@@ -1,6 +1,32 @@
 # Changelog
 
-All notable changes to will be documented in this file.
+All notable changes to `bayarcash/php-sdk` will be documented in this file.
+
+## 3.1.0 - 2026-08-20
+
+New v3 endpoints, DuitNow QR support, and payment-intent enhancements.
+
+### Added
+
+**Payment intents**
+- `createDuitNowQrPaymentIntent()` — create an intent and generate its DuitNow QR in one request.
+- Optional `Idempotency-Key` argument on `createPaymentIntent()` for safe retries (v3).
+- Payer identity verification (v3): `verify_identity` request fields, plus `payerIdentityVerified` and `fpxExtraInfo` on the transaction.
+
+**DuitNow QR**
+- `regenerateDuitNowQr()` — issue a fresh QR for an existing intent.
+- `getDuitNowQrStatus()` — poll a QR transaction's payment status.
+- `DuitNowQrResource`, also exposed as the payment intent's `duitnowQr` property.
+
+**FPX Direct Debit**
+- `getAllFpxDirectDebits()` and `getAllFpxDirectDebitTransactions()` — list mandates and their transactions.
+- `activateFpxDirectDebit()` and `deactivateFpxDirectDebit()`.
+
+**Portals & banks**
+- `getPortal()`, `duitNowDobwBanksList()`, and `getServerStatus()`.
+
+**Payment channels**
+- New constants: `SHOPBACK_BNPL` (20) and `FPX_B2B` (23).
 
 ## 3.0.0 - 2026-07-22
 ### Changed
