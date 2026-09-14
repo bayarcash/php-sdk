@@ -202,8 +202,8 @@ $customer = $bayarcash->createCustomer([
 ]);
 $customers = $bayarcash->getCustomers(['search' => 'jane', 'per_page' => 50]); // ['data','meta','links']
 $customer  = $bayarcash->getCustomer('bcus_xxx');
-$enroll    = $bayarcash->createCustomerPaymentMethod('bcus_xxx'); // ['payment_url' => ...]
-header('Location: ' . $enroll['payment_url']);
+$saveCard  = $bayarcash->saveCard('bcus_xxx'); // ['payment_url' => ...]
+header('Location: ' . $saveCard['payment_url']);
 
 // Plans
 $plan = $bayarcash->createPlan([

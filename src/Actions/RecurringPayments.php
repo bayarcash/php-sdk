@@ -48,11 +48,12 @@ trait RecurringPayments
         return new CustomerResource($this->get('customers/' . $customerId), $this);
     }
 
-    public function createCustomerPaymentMethod(string $customerId)
+    /** Hosted page where the customer saves a card for later on-demand charges. */
+    public function saveCard(string $customerId)
     {
-        $this->ensureV3('createCustomerPaymentMethod');
+        $this->ensureV3('saveCard');
 
-        return $this->post('customers/' . $customerId . '/payment-methods');
+        return $this->post('customers/' . $customerId . '/save-card');
     }
 
     // ---------------------------------------------------------------------

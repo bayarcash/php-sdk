@@ -84,17 +84,17 @@ class CustomerTest extends TestCase
         $this->assertStringContainsString('customers/bcus_9', (string) $this->lastRequest()->getUri());
     }
 
-    public function test_create_customer_payment_method_returns_enrollment_payload(): void
+    public function test_save_card_returns_the_hosted_page_payload(): void
     {
         $bayarcash = $this->sdk([
-            $this->json(['type' => 'payment_method_enrollment', 'status' => 'pending', 'payment_url' => 'https://pay']),
+            $this->json(['type' => 'save_card', 'status' => 'pending', 'payment_url' => 'https://pay']),
         ]);
 
-        $result = $bayarcash->createCustomerPaymentMethod('bcus_9');
+        $result = $bayarcash->saveCard('bcus_9');
 
         $this->assertSame('https://pay', $result['payment_url']);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
-        $this->assertStringContainsString('customers/bcus_9/payment-methods', (string) $this->lastRequest()->getUri());
+        $this->assertStringContainsString('customers/bcus_9/save-card', (string) $this->lastRequest()->getUri());
     }
 
     public function test_recurring_methods_require_v3(): void
