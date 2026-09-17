@@ -13,13 +13,15 @@ class InstallmentTest extends TestCase
     {
         $bayarcash = $this->sdk([
             $this->json([
-                'type' => 'recurring_intent', 'id' => 'brci_2', 'recurring_type' => 'installment',
+                'type' => 'recurring_intent', 'id' => 'brci_2', 'portal_key' => 'pk_test_portal',
+                'recurring_type' => 'installment',
                 'status' => 'pending', 'total_amount' => 1200.0, 'installment_count' => 12,
                 'interval' => 'P1M', 'url' => 'https://console/authorize/brci_2',
             ], 201),
         ]);
 
         $intent = $bayarcash->createInstallment([
+            'portal_key' => 'pk_test_portal',
             'customer_id' => 'bcus_1',
             'total_amount' => 1200.00,
             'interval' => 'P1M',
@@ -29,11 +31,26 @@ class InstallmentTest extends TestCase
 
         $this->assertInstanceOf(RecurringIntentResource::class, $intent);
         $this->assertSame('installment', $intent->recurringType);
+        $this->assertSame('pk_test_portal', $intent->portalKey);
         $this->assertSame(12, $intent->installmentCount);
         $this->assertSame('https://console/authorize/brci_2', $intent->url);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('installments', (string) $this->lastRequest()->getUri());
         $this->assertSame(12, $this->lastBody()['installment_count']);
+        $this->assertSame('pk_test_portal', $this->lastBody()['portal_key']);
+    }
+
+    public function test_create_installment_requires_a_portal_key(): void
+    {
+        $bayarcash = $this->sdk([$this->json(['id' => 'brci_2'], 201)]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Required field 'portal_key' is missing");
+
+        $bayarcash->createInstallment([
+            'customer_id' => 'bcus_1', 'total_amount' => 1200.00,
+            'interval' => 'P1M', 'installment_count' => 12,
+        ]);
     }
 
     public function test_get_installments_paginated(): void

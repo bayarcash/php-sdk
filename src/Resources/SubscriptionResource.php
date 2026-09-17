@@ -6,6 +6,7 @@ class SubscriptionResource extends Resource
 {
     public ?string $type = null;
     public ?string $id = null;
+    public ?string $portalKey = null;
     public ?string $customerId = null;
     public ?string $planId = null;
     public ?string $status = null;

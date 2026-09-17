@@ -12,13 +12,15 @@ class OnDemandPaymentTest extends TestCase
     {
         $bayarcash = $this->sdk([
             $this->json([
-                'type' => 'recurring_intent', 'id' => 'brci_3', 'recurring_type' => 'on_demand',
+                'type' => 'recurring_intent', 'id' => 'brci_3', 'portal_key' => 'pk_test_portal',
+                'recurring_type' => 'on_demand',
                 'status' => 'pending', 'amount' => 25.0, 'description' => 'Top up',
                 'url' => 'https://console/authorize/brci_3',
             ], 201),
         ]);
 
         $intent = $bayarcash->createOnDemandPayment([
+            'portal_key' => 'pk_test_portal',
             'customer_id' => 'bcus_1',
             'amount' => 25.00,
             'description' => 'Top up',
@@ -26,11 +28,23 @@ class OnDemandPaymentTest extends TestCase
 
         $this->assertInstanceOf(RecurringIntentResource::class, $intent);
         $this->assertSame('on_demand', $intent->recurringType);
+        $this->assertSame('pk_test_portal', $intent->portalKey);
         $this->assertSame('https://console/authorize/brci_3', $intent->url);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('payments', (string) $this->lastRequest()->getUri());
         $this->assertSame('idem-key-1', $this->lastRequest()->getHeaderLine('Idempotency-Key'));
         $this->assertSame('Top up', $this->lastBody()['description']);
+        $this->assertSame('pk_test_portal', $this->lastBody()['portal_key']);
+    }
+
+    public function test_create_on_demand_payment_requires_a_portal_key(): void
+    {
+        $bayarcash = $this->sdk([$this->json(['id' => 'brci_3'], 201)]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Required field 'portal_key' is missing");
+
+        $bayarcash->createOnDemandPayment(['customer_id' => 'bcus_1', 'amount' => 25.00]);
     }
 
     public function test_create_on_demand_payment_auto_generates_idempotency_key_when_omitted(): void
@@ -38,6 +52,7 @@ class OnDemandPaymentTest extends TestCase
         $bayarcash = $this->sdk([$this->json(['id' => 'brci_3', 'recurring_type' => 'on_demand'], 201)]);
 
         $bayarcash->createOnDemandPayment([
+            'portal_key' => 'pk_test_portal',
             'customer_id' => 'bcus_1', 'amount' => 25.00, 'description' => 'Top up',
         ]);
 

@@ -6,6 +6,7 @@ class RecurringIntentResource extends Resource
 {
     public ?string $type = null;
     public ?string $id = null;
+    public ?string $portalKey = null;
     public ?string $recurringType = null;
     public ?string $status = null;
     public ?string $customerId = null;

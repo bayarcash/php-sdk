@@ -6,6 +6,7 @@ class CustomerResource extends Resource
 {
     public ?string $type = null;
     public ?string $id = null;
+    public ?string $portalKey = null;
     public ?string $fullName = null;
     public ?string $email = null;
     public ?string $phone = null;

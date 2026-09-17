@@ -17,6 +17,10 @@ use Webimpian\BayarcashSdk\Resources\SubscriptionResource;
  * Installments and on-demand Payments return a RecurringIntentResource carrying
  * an authorization `url` — redirect the buyer there to authorize their card,
  * then fetch the eventual resource by id.
+ *
+ * Every creating call REQUIRES `portal_key` — the merchant's portal key, the
+ * same value `createPaymentIntent` takes, and the portal must have the card
+ * channel enabled. GET and PATCH calls do not take it.
  */
 trait RecurringPayments
 {
@@ -24,9 +28,13 @@ trait RecurringPayments
     // Customers
     // ---------------------------------------------------------------------
 
+    /**
+     * @param  array  $data  Customer payload. `portal_key` is required.
+     */
     public function createCustomer(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createCustomer');
+        $this->requirePortalKey($data);
 
         return new CustomerResource(
             $this->post('customers', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
@@ -48,21 +56,33 @@ trait RecurringPayments
         return new CustomerResource($this->get('customers/' . $customerId), $this);
     }
 
-    /** Hosted page where the customer saves a card for later on-demand charges. */
-    public function saveCard(string $customerId)
+    /**
+     * Hosted page where the customer saves a card for later on-demand charges.
+     *
+     * @param  string  $portalKey  The merchant's portal key (required by the API).
+     */
+    public function saveCard(string $customerId, string $portalKey)
     {
         $this->ensureV3('saveCard');
+        $this->requirePortalKey(['portal_key' => $portalKey]);
 
-        return $this->post('customers/' . $customerId . '/save-card');
+        return $this->post(
+            'customers/' . $customerId . '/save-card',
+            ['json' => ['portal_key' => $portalKey]]
+        );
     }
 
     // ---------------------------------------------------------------------
     // Plans
     // ---------------------------------------------------------------------
 
+    /**
+     * @param  array  $data  Plan payload. `portal_key` is required.
+     */
     public function createPlan(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createPlan');
+        $this->requirePortalKey($data);
 
         return new PlanResource(
             $this->post('plans', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
@@ -96,13 +116,15 @@ trait RecurringPayments
     // ---------------------------------------------------------------------
 
     /**
-     * @param  array  $data  Subscription payload. `start_date` must be a full
-     *                       ISO-8601 timestamp (e.g. "2026-07-01T09:00:00+08:00")
-     *                       at least 24 hours in the future — a bare date is rejected.
+     * @param  array  $data  Subscription payload. `portal_key` is required, and
+     *                       `start_date` must be a full ISO-8601 timestamp
+     *                       (e.g. "2026-07-01T09:00:00+08:00") at least 24 hours
+     *                       in the future — a bare date is rejected.
      */
     public function createSubscription(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createSubscription');
+        $this->requirePortalKey($data);
 
         return new RecurringIntentResource(
             $this->post('subscriptions', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
@@ -167,13 +189,15 @@ trait RecurringPayments
     // ---------------------------------------------------------------------
 
     /**
-     * @param  array  $data  Installment payload. `start_date` must be a full
-     *                       ISO-8601 timestamp (e.g. "2026-07-01T09:00:00+08:00")
-     *                       at least 24 hours in the future — a bare date is rejected.
+     * @param  array  $data  Installment payload. `portal_key` is required, and
+     *                       `start_date` must be a full ISO-8601 timestamp
+     *                       (e.g. "2026-07-01T09:00:00+08:00") at least 24 hours
+     *                       in the future — a bare date is rejected.
      */
     public function createInstallment(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createInstallment');
+        $this->requirePortalKey($data);
 
         return new RecurringIntentResource(
             $this->post('installments', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
@@ -242,10 +266,13 @@ trait RecurringPayments
      *
      * The API REQUIRES an Idempotency-Key; if none is supplied the SDK
      * auto-generates a UUID v4 (pass your own to make retries idempotent).
+     *
+     * @param  array  $data  Payment payload. `portal_key` is required.
      */
     public function createOnDemandPayment(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createOnDemandPayment');
+        $this->requirePortalKey($data);
 
         $idempotencyKey = $idempotencyKey ?: $this->generateIdempotencyKey();
 
@@ -291,6 +318,18 @@ trait RecurringPayments
     {
         if ($this->getApiVersion() !== 'v3') {
             throw new \Exception("The {$method} method is only available for API version v3.");
+        }
+    }
+
+    /**
+     * Every recurring creating call must carry the merchant's portal key.
+     *
+     * @throws \InvalidArgumentException
+     */
+    protected function requirePortalKey(array $data): void
+    {
+        if (! isset($data['portal_key']) || $data['portal_key'] === '') {
+            throw new \InvalidArgumentException("Required field 'portal_key' is missing");
         }
     }
 

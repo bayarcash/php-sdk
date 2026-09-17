@@ -121,7 +121,11 @@ trait MakesHttpRequests
         }
 
         if ($response->getStatusCode() == 400) {
-            throw new FailedActionException(json_decode((string) $response->getBody()));
+            // A 400 is a terminal validation/business rejection (e.g. "Customer
+            // already subscribed to plan") — surface the API's message and do
+            // NOT retry. Decode as an array so the message reaches getMessage()
+            // instead of feeding a stdClass into Exception's string constructor.
+            throw new FailedActionException((string) $response->getBody(), 400);
         }
 
         if ($response->getStatusCode() == 429) {

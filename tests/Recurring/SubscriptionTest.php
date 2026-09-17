@@ -13,13 +13,15 @@ class SubscriptionTest extends TestCase
     {
         $bayarcash = $this->sdk([
             $this->json([
-                'type' => 'recurring_intent', 'id' => 'brci_1', 'recurring_type' => 'subscription',
-                'status' => 'pending', 'customer_id' => 'bcus_1', 'plan_id' => 'bpln_1',
+                'type' => 'recurring_intent', 'id' => 'brci_1', 'portal_key' => 'pk_test_portal',
+                'recurring_type' => 'subscription', 'status' => 'pending',
+                'customer_id' => 'bcus_1', 'plan_id' => 'bpln_1',
                 'url' => 'https://console/authorize/brci_1',
             ], 201),
         ]);
 
         $intent = $bayarcash->createSubscription([
+            'portal_key' => 'pk_test_portal',
             'customer_id' => 'bcus_1',
             'plan_id' => 'bpln_1',
             'start_date' => '2026-07-01T09:00:00+08:00',
@@ -29,10 +31,22 @@ class SubscriptionTest extends TestCase
 
         $this->assertInstanceOf(RecurringIntentResource::class, $intent);
         $this->assertSame('subscription', $intent->recurringType);
+        $this->assertSame('pk_test_portal', $intent->portalKey);
         $this->assertSame('https://console/authorize/brci_1', $intent->url);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('subscriptions', (string) $this->lastRequest()->getUri());
         $this->assertSame('bpln_1', $this->lastBody()['plan_id']);
+        $this->assertSame('pk_test_portal', $this->lastBody()['portal_key']);
+    }
+
+    public function test_create_subscription_requires_a_portal_key(): void
+    {
+        $bayarcash = $this->sdk([$this->json(['id' => 'brci_1'], 201)]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Required field 'portal_key' is missing");
+
+        $bayarcash->createSubscription(['customer_id' => 'bcus_1', 'plan_id' => 'bpln_1']);
     }
 
     public function test_create_subscription_accepts_inline_customer(): void
@@ -40,6 +54,7 @@ class SubscriptionTest extends TestCase
         $bayarcash = $this->sdk([$this->json(['id' => 'brci_1', 'recurring_type' => 'subscription'], 201)]);
 
         $bayarcash->createSubscription([
+            'portal_key' => 'pk_test_portal',
             'customer' => ['full_name' => 'Jo', 'email' => 'jo@e.com', 'phone' => '011'],
             'plan_id' => 'bpln_1',
             'start_date' => '2026-07-01T09:00:00+08:00',
