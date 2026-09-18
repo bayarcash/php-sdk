@@ -18,9 +18,11 @@ use Webimpian\BayarcashSdk\Resources\SubscriptionResource;
  * an authorization `url` — redirect the buyer there to authorize their card,
  * then fetch the eventual resource by id.
  *
- * Every creating call REQUIRES `portal_key` — the merchant's portal key, the
+ * The three money requests — createSubscription, createInstallment and
+ * createOnDemandPayment — REQUIRE `portal_key`: the merchant's portal key, the
  * same value `createPaymentIntent` takes, and the portal must have the card
- * channel enabled. GET and PATCH calls do not take it.
+ * channel enabled. Customers and Plans are portal-agnostic records, so they do
+ * not take it, and neither do GET and PATCH calls.
  */
 trait RecurringPayments
 {
@@ -28,13 +30,9 @@ trait RecurringPayments
     // Customers
     // ---------------------------------------------------------------------
 
-    /**
-     * @param  array  $data  Customer payload. `portal_key` is required.
-     */
     public function createCustomer(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createCustomer');
-        $this->requirePortalKey($data);
 
         return new CustomerResource(
             $this->post('customers', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
@@ -56,33 +54,21 @@ trait RecurringPayments
         return new CustomerResource($this->get('customers/' . $customerId), $this);
     }
 
-    /**
-     * Hosted page where the customer saves a card for later on-demand charges.
-     *
-     * @param  string  $portalKey  The merchant's portal key (required by the API).
-     */
-    public function saveCard(string $customerId, string $portalKey)
+    /** Hosted page where the customer saves a card for later on-demand charges. */
+    public function saveCard(string $customerId)
     {
         $this->ensureV3('saveCard');
-        $this->requirePortalKey(['portal_key' => $portalKey]);
 
-        return $this->post(
-            'customers/' . $customerId . '/save-card',
-            ['json' => ['portal_key' => $portalKey]]
-        );
+        return $this->post('customers/' . $customerId . '/save-card');
     }
 
     // ---------------------------------------------------------------------
     // Plans
     // ---------------------------------------------------------------------
 
-    /**
-     * @param  array  $data  Plan payload. `portal_key` is required.
-     */
     public function createPlan(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createPlan');
-        $this->requirePortalKey($data);
 
         return new PlanResource(
             $this->post('plans', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
@@ -322,7 +308,7 @@ trait RecurringPayments
     }
 
     /**
-     * Every recurring creating call must carry the merchant's portal key.
+     * The three money requests must carry the merchant's portal key.
      *
      * @throws \InvalidArgumentException
      */

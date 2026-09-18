@@ -72,7 +72,7 @@ class ErrorHandlingTest extends TestCase
 
         $this->expectException(ValidationException::class);
 
-        $bayarcash->createCustomer(['portal_key' => 'pk_test_portal', 'full_name' => 'x']);
+        $bayarcash->createCustomer(['full_name' => 'x']);
     }
 
     public function test_rejected_portal_key_surfaces_as_a_validation_exception(): void
@@ -88,8 +88,9 @@ class ErrorHandlingTest extends TestCase
         ]);
 
         try {
-            $bayarcash->createCustomer([
-                'portal_key' => 'pk_wrong', 'full_name' => 'x', 'email' => 'x@y.com', 'phone' => '1',
+            $bayarcash->createSubscription([
+                'portal_key' => 'pk_wrong', 'customer_id' => 'bcus_1', 'plan_id' => 'bpln_1',
+                'start_date' => '2026-07-01T09:00:00+08:00',
             ]);
             $this->fail('Expected ValidationException was not thrown.');
         } catch (ValidationException $e) {

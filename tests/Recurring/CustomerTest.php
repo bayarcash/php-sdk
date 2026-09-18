@@ -11,21 +11,19 @@ class CustomerTest extends TestCase
     {
         $bayarcash = $this->sdk([
             $this->json([
-                'type' => 'customer', 'id' => 'bcus_1', 'portal_key' => 'pk_test_portal',
+                'type' => 'customer', 'id' => 'bcus_1',
                 'full_name' => 'Jane Doe', 'email' => 'jane@example.com',
                 'phone' => '0123456789', 'card_on_file' => false,
             ], 201),
         ]);
 
         $customer = $bayarcash->createCustomer([
-            'portal_key' => 'pk_test_portal',
             'full_name' => 'Jane Doe', 'email' => 'jane@example.com', 'phone' => '0123456789',
         ]);
 
         $this->assertInstanceOf(CustomerResource::class, $customer);
         $this->assertSame('bcus_1', $customer->id);
         $this->assertSame('Jane Doe', $customer->fullName);
-        $this->assertSame('pk_test_portal', $customer->portalKey);
         $this->assertFalse($customer->cardOnFile);
 
         $request = $this->lastRequest();
@@ -33,17 +31,7 @@ class CustomerTest extends TestCase
         $this->assertStringContainsString('customers', (string) $request->getUri());
         $this->assertStringContainsString('application/json', $request->getHeaderLine('Content-Type'));
         $this->assertSame('jane@example.com', $this->lastBody()['email']);
-        $this->assertSame('pk_test_portal', $this->lastBody()['portal_key']);
-    }
-
-    public function test_create_customer_requires_a_portal_key(): void
-    {
-        $bayarcash = $this->sdk([$this->json(['id' => 'bcus_1'], 201)]);
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("Required field 'portal_key' is missing");
-
-        $bayarcash->createCustomer(['full_name' => 'Jane', 'email' => 'j@e.com', 'phone' => '011']);
+        $this->assertArrayNotHasKey('portal_key', $this->lastBody());
     }
 
     public function test_create_customer_sends_idempotency_key_when_given(): void
@@ -51,7 +39,7 @@ class CustomerTest extends TestCase
         $bayarcash = $this->sdk([$this->json(['id' => 'bcus_1'], 201)]);
 
         $bayarcash->createCustomer(
-            ['portal_key' => 'pk_test_portal', 'full_name' => 'Jane', 'email' => 'j@e.com', 'phone' => '011'],
+            ['full_name' => 'Jane', 'email' => 'j@e.com', 'phone' => '011'],
             'my-key-123'
         );
 
@@ -63,7 +51,7 @@ class CustomerTest extends TestCase
         $bayarcash = $this->sdk([$this->json(['id' => 'bcus_1'], 201)]);
 
         $bayarcash->createCustomer([
-            'portal_key' => 'pk_test_portal', 'full_name' => 'Jane', 'email' => 'j@e.com', 'phone' => '011',
+            'full_name' => 'Jane', 'email' => 'j@e.com', 'phone' => '011',
         ]);
 
         $this->assertFalse($this->lastRequest()->hasHeader('Idempotency-Key'));
@@ -106,13 +94,13 @@ class CustomerTest extends TestCase
             $this->json(['type' => 'save_card', 'status' => 'pending', 'payment_url' => 'https://pay']),
         ]);
 
-        $result = $bayarcash->saveCard('bcus_9', 'pk_test_portal');
+        $result = $bayarcash->saveCard('bcus_9');
 
         $this->assertSame('https://pay', $result['payment_url']);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('customers/bcus_9/save-card', (string) $this->lastRequest()->getUri());
-        $this->assertStringContainsString('application/json', $this->lastRequest()->getHeaderLine('Content-Type'));
-        $this->assertSame(['portal_key' => 'pk_test_portal'], $this->lastBody());
+        // Nothing is minted here, so the request carries no body at all.
+        $this->assertSame('', (string) $this->lastRequest()->getBody());
     }
 
     public function test_recurring_methods_require_v3(): void
@@ -121,7 +109,7 @@ class CustomerTest extends TestCase
 
         $this->expectException(\Exception::class);
         $bayarcash->createCustomer([
-            'portal_key' => 'pk_test_portal', 'full_name' => 'x', 'email' => 'x@y.com', 'phone' => '1',
+            'full_name' => 'x', 'email' => 'x@y.com', 'phone' => '1',
         ]);
     }
 }

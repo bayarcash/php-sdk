@@ -11,14 +11,13 @@ class PlanTest extends TestCase
     {
         $bayarcash = $this->sdk([
             $this->json([
-                'type' => 'plan', 'id' => 'bpln_1', 'portal_key' => 'pk_test_portal',
+                'type' => 'plan', 'id' => 'bpln_1',
                 'name' => 'Pro', 'description' => 'Pro plan',
                 'price' => '49.90', 'currency' => 'MYR', 'interval' => 'P1M',
             ], 201),
         ]);
 
         $plan = $bayarcash->createPlan([
-            'portal_key' => 'pk_test_portal',
             'name' => 'Pro', 'price' => 49.90, 'currency' => 'MYR', 'interval' => 'P1M',
         ]);
 
@@ -26,21 +25,10 @@ class PlanTest extends TestCase
         $this->assertSame('bpln_1', $plan->id);
         $this->assertSame('49.90', $plan->price);
         $this->assertSame('P1M', $plan->interval);
-        $this->assertSame('pk_test_portal', $plan->portalKey);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('plans', (string) $this->lastRequest()->getUri());
         $this->assertSame('Pro', $this->lastBody()['name']);
-        $this->assertSame('pk_test_portal', $this->lastBody()['portal_key']);
-    }
-
-    public function test_create_plan_requires_a_portal_key(): void
-    {
-        $bayarcash = $this->sdk([$this->json(['id' => 'bpln_1'], 201)]);
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("Required field 'portal_key' is missing");
-
-        $bayarcash->createPlan(['name' => 'Pro', 'price' => 49.90, 'interval' => 'P1M']);
+        $this->assertArrayNotHasKey('portal_key', $this->lastBody());
     }
 
     public function test_get_plans_paginated(): void
