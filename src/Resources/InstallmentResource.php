@@ -15,6 +15,7 @@ class InstallmentResource extends Resource
     public ?string $currency = null;
     public ?string $interval = null;
     public ?int $installmentCount = null;
+    public ?string $description = null;
     public ?string $status = null;
     public ?string $nextPaymentDate = null;
     public ?string $createdAt = null;

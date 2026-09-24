@@ -16,7 +16,8 @@ class InstallmentTest extends TestCase
                 'type' => 'recurring_intent', 'id' => 'brci_2', 'portal_key' => 'pk_test_portal',
                 'recurring_type' => 'installment',
                 'status' => 'pending', 'total_amount' => 1200.0, 'installment_count' => 12,
-                'interval' => 'P1M', 'url' => 'https://console/authorize/brci_2',
+                'interval' => 'P1M', 'description' => 'Laptop, 12 payments',
+                'url' => 'https://console/authorize/brci_2',
             ], 201),
         ]);
 
@@ -26,6 +27,7 @@ class InstallmentTest extends TestCase
             'total_amount' => 1200.00,
             'interval' => 'P1M',
             'installment_count' => 12,
+            'description' => 'Laptop, 12 payments',
             'start_date' => '2026-07-01T09:00:00+08:00',
         ]);
 
@@ -38,6 +40,8 @@ class InstallmentTest extends TestCase
         $this->assertStringContainsString('installments', (string) $this->lastRequest()->getUri());
         $this->assertSame(12, $this->lastBody()['installment_count']);
         $this->assertSame('pk_test_portal', $this->lastBody()['portal_key']);
+        $this->assertSame('Laptop, 12 payments', $this->lastBody()['description']);
+        $this->assertSame('Laptop, 12 payments', $intent->description);
     }
 
     public function test_create_installment_requires_a_portal_key(): void
@@ -70,6 +74,7 @@ class InstallmentTest extends TestCase
             $this->json([
                 'id' => 'bins_1', 'total_amount' => '1200.00', 'paid_amount' => '300.00',
                 'remaining_amount' => '900.00', 'progress_percent' => 25, 'installment_count' => 12,
+                'description' => 'Laptop, 12 payments',
                 'charges' => [['id' => 'ch_1', 'amount' => '100.00']],
             ]),
         ]);
@@ -78,6 +83,7 @@ class InstallmentTest extends TestCase
 
         $this->assertInstanceOf(InstallmentResource::class, $installment);
         $this->assertSame('1200.00', $installment->totalAmount);
+        $this->assertSame('Laptop, 12 payments', $installment->description);
         $this->assertSame(12, $installment->installmentCount);
         $this->assertCount(1, $installment->charges);
         $this->assertInstanceOf(ChargeResource::class, $installment->charges[0]);

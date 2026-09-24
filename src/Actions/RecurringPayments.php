@@ -175,10 +175,11 @@ trait RecurringPayments
     // ---------------------------------------------------------------------
 
     /**
-     * @param  array  $data  Installment payload. `portal_key` is required, and
-     *                       `start_date` must be a full ISO-8601 timestamp
-     *                       (e.g. "2026-07-01T09:00:00+08:00") at least 24 hours
-     *                       in the future — a bare date is rejected.
+     * @param  array  $data  Installment payload. `portal_key` is required,
+     *                       `description` (what the customer is paying off, up to
+     *                       500 characters) is required, and `start_date` must be
+     *                       a full ISO-8601 timestamp (e.g. "2026-07-01T09:00:00+08:00")
+     *                       at least 24 hours in the future — a bare date is rejected.
      */
     public function createInstallment(array $data, ?string $idempotencyKey = null)
     {
