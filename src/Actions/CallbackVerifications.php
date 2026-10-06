@@ -141,4 +141,48 @@ trait CallbackVerifications
 
         return hash_hmac('sha256', $payload, $secretKey) === $callbackChecksum;
     }
+
+    /**
+     * Recurring charge callback (record_type `recurring_charge`), sent for SUCCESSFUL
+     * subscription, installment and on-demand charges only.
+     *
+     * The body is form-encoded, which drops null fields (order_number and
+     * payer_bank_name are always null here) while the checksum signs them as ''.
+     * So the field list is fixed and a missing field counts as ''.
+     */
+    public function verifyRecurringChargeCallbackData(array $callbackData, string $secretKey): bool
+    {
+        return $this->verifyFixedFieldChecksum($callbackData, $secretKey, [
+            'record_type', 'transaction_id', 'exchange_reference_number', 'exchange_transaction_id',
+            'order_number', 'currency', 'amount', 'payer_name', 'payer_email', 'payer_bank_name',
+            'status', 'status_description', 'datetime',
+            'charge_source', 'subscription_id', 'installment_id', 'customer_id', 'recurring_intent_id',
+        ]);
+    }
+
+    /**
+     * Recurring lifecycle callback (record_type `recurring_subscription` or
+     * `recurring_installment`, event `enrolment_completed` or `status_updated`).
+     */
+    public function verifyRecurringLifecycleCallbackData(array $callbackData, string $secretKey): bool
+    {
+        return $this->verifyFixedFieldChecksum($callbackData, $secretKey, [
+            'record_type', 'event', 'subscription_id', 'installment_id', 'customer_id', 'plan_id',
+            'status', 'previous_status', 'paused_reason', 'next_payment_date',
+            'total_amount', 'installment_count', 'remaining_amount', 'datetime',
+        ]);
+    }
+
+    /** ksort + implode('|') + HMAC-SHA256 over a fixed field list, '' for anything absent. */
+    protected function verifyFixedFieldChecksum(array $callbackData, string $secretKey, array $fields): bool
+    {
+        $payload = [];
+        foreach ($fields as $field) {
+            $payload[$field] = $callbackData[$field] ?? '';
+        }
+
+        ksort($payload);
+
+        return hash_equals(hash_hmac('sha256', implode('|', $payload), $secretKey), (string) ($callbackData['checksum'] ?? ''));
+    }
 }

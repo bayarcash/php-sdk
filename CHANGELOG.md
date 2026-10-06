@@ -2,6 +2,26 @@
 
 All notable changes to will be documented in this file.
 
+## Unreleased
+### Added
+- `getCustomerPayments($customerId, $page, $perPage)` — every charge for a customer, including on-demand charges.
+- `verifyRecurringChargeCallbackData()` and `verifyRecurringLifecycleCallbackData()` for the two recurring webhooks.
+- `RecurringIntentResource`: `failureReason`, `subscriptionId`, `installmentId`, `transactionId`.
+- `TransactionResource`: `recurringCustomerId`, `subscription`, `installment`. `SubscriptionResource`: `plan`.
+- `saveCard()` takes an optional Idempotency-Key.
+
+### Changed
+- `createCustomer`, `createPlan`, `createSubscription`, `createInstallment` and `saveCard` now always send an
+  `Idempotency-Key`, generating a UUID v4 when none is passed (the API requires it on the minting POSTs).
+- `BoostRecurring::INTERVAL_*` are now `day`/`week`/`month`/`year` (the API rejects ISO durations).
+- **Breaking:** `getPayment()` returns a `TransactionResource`; `getSubscriptionPayments()` / `getInstallmentPayments()`
+  return a paginated `['data' => TransactionResource[], 'meta', 'links']` and take `$page` / `$perPage`.
+- **Breaking:** `getSubscription()` / `getInstallment()` no longer carry `->charges` (the API stopped embedding them).
+
+### Removed
+- `PaymentResource`, `ChargeResource` and the `BoostRecurring::PAYMENT_*` constants — charges are transaction records,
+  whose status is the `Fpx::STATUS_*` code.
+
 ## 2.2.0 - 2026-06-22
 ### Added
 - Boost recurring payment support (v3 only):

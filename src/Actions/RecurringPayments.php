@@ -2,13 +2,12 @@
 
 namespace Webimpian\BayarcashSdk\Actions;
 
-use Webimpian\BayarcashSdk\Resources\ChargeResource;
 use Webimpian\BayarcashSdk\Resources\CustomerResource;
 use Webimpian\BayarcashSdk\Resources\InstallmentResource;
-use Webimpian\BayarcashSdk\Resources\PaymentResource;
 use Webimpian\BayarcashSdk\Resources\PlanResource;
 use Webimpian\BayarcashSdk\Resources\RecurringIntentResource;
 use Webimpian\BayarcashSdk\Resources\SubscriptionResource;
+use Webimpian\BayarcashSdk\Resources\TransactionResource;
 
 /**
  * Boost recurring-payment endpoints (v3 only).
@@ -23,6 +22,17 @@ use Webimpian\BayarcashSdk\Resources\SubscriptionResource;
  * same value `createPaymentIntent` takes, and the portal must have the card
  * channel enabled. Customers and Plans are portal-agnostic records, so they do
  * not take it, and neither do GET and PATCH calls.
+ *
+ * Every POST that mints something (customer, plan, subscription, installment,
+ * on-demand payment) REQUIRES an `Idempotency-Key` header — the API answers 422
+ * without one. The SDK generates a UUID v4 when the caller passes none; pass
+ * your own (e.g. derived from your order id) to make a retry return the
+ * original response instead of minting a second record or authorization link.
+ *
+ * Charges are transaction records (TransactionResource, the same shape as
+ * getTransaction()): `id` is the trx_ id, `status` is the Fpx::STATUS_* code
+ * (3 successful, 2 failed, 1 pending) and `exchangeTransactionId` is the
+ * provider charge id.
  */
 trait RecurringPayments
 {
@@ -54,12 +64,34 @@ trait RecurringPayments
         return new CustomerResource($this->get('customers/' . $customerId), $this);
     }
 
-    /** Hosted page where the customer saves a card for later on-demand charges. */
-    public function saveCard(string $customerId)
+    /**
+     * Hosted page where the customer saves a card for later on-demand charges.
+     *
+     * The key is optional on the API, but with one a retry replays the first
+     * hosted `payment_url` instead of opening a second card authorization.
+     */
+    public function saveCard(string $customerId, ?string $idempotencyKey = null)
     {
         $this->ensureV3('saveCard');
 
-        return $this->post('customers/' . $customerId . '/save-card');
+        return $this->post(
+            'customers/' . $customerId . '/save-card',
+            [],
+            $this->idempotencyHeaders($idempotencyKey)
+        );
+    }
+
+    /**
+     * Every charge billed to the customer, newest first — across all their
+     * agreements plus the on-demand charges (the only list that has those).
+     *
+     * @return array{data: TransactionResource[], meta: array, links: array}
+     */
+    public function getCustomerPayments(string $customerId, int $page = 1, int $perPage = 15)
+    {
+        $this->ensureV3('getCustomerPayments');
+
+        return $this->chargePage('customers/' . $customerId . '/payments', $page, $perPage);
     }
 
     // ---------------------------------------------------------------------
@@ -104,8 +136,8 @@ trait RecurringPayments
     /**
      * @param  array  $data  Subscription payload. `portal_key` is required, and
      *                       `start_date` must be a full ISO-8601 timestamp
-     *                       (e.g. "2026-07-01T09:00:00+08:00") at least 24 hours
-     *                       in the future — a bare date is rejected.
+     *                       (e.g. "2026-07-01T09:00:00+08:00") in the future — a
+     *                       minute ahead is enough; a bare date is rejected.
      */
     public function createSubscription(array $data, ?string $idempotencyKey = null)
     {
@@ -129,9 +161,7 @@ trait RecurringPayments
     {
         $this->ensureV3('getSubscription');
 
-        $response = $this->get('subscriptions/' . $subscriptionId);
-
-        return $this->withCharges(new SubscriptionResource($response, $this), $response);
+        return new SubscriptionResource($this->get('subscriptions/' . $subscriptionId), $this);
     }
 
     public function updateSubscription(string $subscriptionId, array $data)
@@ -161,13 +191,12 @@ trait RecurringPayments
         return $this->updateSubscription($subscriptionId, ['status' => 'terminated']);
     }
 
-    public function getSubscriptionPayments(string $subscriptionId)
+    /** @return array{data: TransactionResource[], meta: array, links: array} */
+    public function getSubscriptionPayments(string $subscriptionId, int $page = 1, int $perPage = 15)
     {
         $this->ensureV3('getSubscriptionPayments');
 
-        $response = $this->get('subscriptions/' . $subscriptionId . '/payments');
-
-        return $this->transformCollection($response['data'] ?? [], ChargeResource::class);
+        return $this->chargePage('subscriptions/' . $subscriptionId . '/payments', $page, $perPage);
     }
 
     // ---------------------------------------------------------------------
@@ -177,9 +206,11 @@ trait RecurringPayments
     /**
      * @param  array  $data  Installment payload. `portal_key` is required,
      *                       `description` (what the customer is paying off, up to
-     *                       500 characters) is required, and `start_date` must be
-     *                       a full ISO-8601 timestamp (e.g. "2026-07-01T09:00:00+08:00")
-     *                       at least 24 hours in the future — a bare date is rejected.
+     *                       500 characters) is required, `interval` is one of
+     *                       day|week|month|year (BoostRecurring::INTERVAL_*), and
+     *                       `start_date` must be a full ISO-8601 timestamp
+     *                       (e.g. "2026-07-01T09:00:00+08:00") in the future — a
+     *                       bare date is rejected.
      */
     public function createInstallment(array $data, ?string $idempotencyKey = null)
     {
@@ -203,9 +234,7 @@ trait RecurringPayments
     {
         $this->ensureV3('getInstallment');
 
-        $response = $this->get('installments/' . $installmentId);
-
-        return $this->withCharges(new InstallmentResource($response, $this), $response);
+        return new InstallmentResource($this->get('installments/' . $installmentId), $this);
     }
 
     public function updateInstallment(string $installmentId, array $data)
@@ -235,13 +264,12 @@ trait RecurringPayments
         return $this->updateInstallment($installmentId, ['status' => 'terminated']);
     }
 
-    public function getInstallmentPayments(string $installmentId)
+    /** @return array{data: TransactionResource[], meta: array, links: array} */
+    public function getInstallmentPayments(string $installmentId, int $page = 1, int $perPage = 15)
     {
         $this->ensureV3('getInstallmentPayments');
 
-        $response = $this->get('installments/' . $installmentId . '/payments');
-
-        return $this->transformCollection($response['data'] ?? [], ChargeResource::class);
+        return $this->chargePage('installments/' . $installmentId . '/payments', $page, $perPage);
     }
 
     // ---------------------------------------------------------------------
@@ -251,9 +279,6 @@ trait RecurringPayments
     /**
      * Create a one-off on-demand charge against a customer's card-on-file.
      *
-     * The API REQUIRES an Idempotency-Key; if none is supplied the SDK
-     * auto-generates a UUID v4 (pass your own to make retries idempotent).
-     *
      * @param  array  $data  Payment payload. `portal_key` is required.
      */
     public function createOnDemandPayment(array $data, ?string $idempotencyKey = null)
@@ -261,19 +286,21 @@ trait RecurringPayments
         $this->ensureV3('createOnDemandPayment');
         $this->requirePortalKey($data);
 
-        $idempotencyKey = $idempotencyKey ?: $this->generateIdempotencyKey();
-
         return new RecurringIntentResource(
             $this->post('payments', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
             $this
         );
     }
 
+    /**
+     * One charge, as a transaction record. Accepts either the provider charge id
+     * (`exchangeTransactionId` of a list row or the charge callback) or the trx_ id.
+     */
     public function getPayment(string $paymentId)
     {
         $this->ensureV3('getPayment');
 
-        return new PaymentResource($this->get('payments/' . $paymentId), $this);
+        return new TransactionResource($this->get('payments/' . $paymentId), $this);
     }
 
     /**
@@ -283,7 +310,11 @@ trait RecurringPayments
      * an on-demand charge, the only id you hold is the intent id (returned by
      * createSubscription/createInstallment/createOnDemandPayment) — NOT a transaction
      * id. Call this to verify the outcome instead of trusting redirect query params.
-     * The resource's `status` is one of: pending, authorizing, processing, completed, failed.
+     * The resource's `status` is one of: pending, authorizing, processing, completed,
+     * failed, expired. A failed intent carries `failureReason`; a completed or failed
+     * on-demand intent carries `transactionId` (the trx_ id of the charge, or null
+     * when none was booked) — a failed charge sends no webhook, so this is the only
+     * place to learn about it.
      */
     public function getRecurringIntent(string $intentId)
     {
@@ -320,10 +351,13 @@ trait RecurringPayments
         }
     }
 
-    /** Build the Idempotency-Key header array (empty when no key). */
+    /**
+     * The Idempotency-Key header, generating a UUID v4 when the caller gave none:
+     * the API rejects a minting POST without one.
+     */
     protected function idempotencyHeaders(?string $key): array
     {
-        return $key ? ['Idempotency-Key' => $key] : [];
+        return ['Idempotency-Key' => $key ?: $this->generateIdempotencyKey()];
     }
 
     /** Generate an RFC-4122 v4 UUID for idempotency, without external deps. */
@@ -342,19 +376,13 @@ trait RecurringPayments
         return empty($filters) ? '' : '?' . http_build_query($filters);
     }
 
-    /**
-     * Replace a resource's raw `charges` array with transformed ChargeResource objects.
-     *
-     * @param  \Webimpian\BayarcashSdk\Resources\SubscriptionResource|\Webimpian\BayarcashSdk\Resources\InstallmentResource  $resource
-     * @return mixed
-     */
-    protected function withCharges($resource, array $response)
+    /** One page of a charge list; the API clamps per_page to 100. */
+    protected function chargePage(string $uri, int $page, int $perPage): array
     {
-        if (isset($response['charges']) && is_array($response['charges'])) {
-            $resource->charges = $this->transformCollection($response['charges'], ChargeResource::class);
-        }
-
-        return $resource;
+        return $this->paginate(
+            $this->get($uri . $this->query(['page' => $page, 'per_page' => $perPage])),
+            TransactionResource::class
+        );
     }
 
     /** Wrap a paginated API response into data/meta/links with transformed resources. */

@@ -21,20 +21,13 @@ class BoostRecurring
     const STATUS_TERMINATED = 'terminated';
 
     /*
-     * On-demand payment statuses (PaymentResource->status)
+     * Billing intervals (plan / installment 'interval') — the only values the API
+     * accepts and returns. Charge statuses are transaction codes: see Fpx::STATUS_*.
      */
-    const PAYMENT_SUCCEEDED = 'succeeded';
-    const PAYMENT_FAILED = 'failed';
-    const PAYMENT_PROCESSING = 'processing';
-    const PAYMENT_CANCELED = 'canceled';
-
-    /*
-     * Common ISO-8601 billing intervals (plan / installment 'interval')
-     */
-    const INTERVAL_DAILY = 'P1D';
-    const INTERVAL_WEEKLY = 'P1W';
-    const INTERVAL_MONTHLY = 'P1M';
-    const INTERVAL_YEARLY = 'P1Y';
+    const INTERVAL_DAILY = 'day';
+    const INTERVAL_WEEKLY = 'week';
+    const INTERVAL_MONTHLY = 'month';
+    const INTERVAL_YEARLY = 'year';
 
     protected static function getStatusLabels()
     {

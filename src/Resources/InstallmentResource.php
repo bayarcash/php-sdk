@@ -19,7 +19,4 @@ class InstallmentResource extends Resource
     public ?string $status = null;
     public ?string $nextPaymentDate = null;
     public ?string $createdAt = null;
-
-    /** @var \Webimpian\BayarcashSdk\Resources\ChargeResource[] */
-    public array $charges = [];
 }

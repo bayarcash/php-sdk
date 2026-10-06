@@ -26,4 +26,13 @@ class TransactionResource extends Resource
     public ?string $portal = null;
     public ?array $merchant = null;
     public ?array $mandate = null;
+
+    /*
+     * Recurring charges only. recurringCustomerId is the rcus_ id; a scheduled
+     * charge carries the agreement that produced it (raw subscription/installment
+     * resource arrays, the subscription with its `plan`), an on-demand charge neither.
+     */
+    public ?string $recurringCustomerId = null;
+    public ?array $subscription = null;
+    public ?array $installment = null;
 }

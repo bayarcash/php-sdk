@@ -9,11 +9,10 @@ class SubscriptionResource extends Resource
     public ?string $portalKey = null;
     public ?string $customerId = null;
     public ?string $planId = null;
+    /** The plan it bills on, in the plan resource's shape (raw array). */
+    public ?array $plan = null;
     public ?string $status = null;
     public ?string $startDate = null;
     public ?string $nextPaymentDate = null;
     public ?string $createdAt = null;
-
-    /** @var \Webimpian\BayarcashSdk\Resources\ChargeResource[] */
-    public array $charges = [];
 }

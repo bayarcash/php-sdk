@@ -31,8 +31,8 @@ class ErrorHandlingTest extends TestCase
         try {
             $bayarcash->createSubscription([
                 'portal_key' => 'pk_test_portal',
-                'customer_id' => 'bcus_1',
-                'plan_id' => 'bpln_1',
+                'customer_id' => 'rcus_1',
+                'plan_id' => 'rpln_1',
                 'start_date' => '2026-07-01T09:00:00+08:00',
             ]);
             $this->fail('Expected FailedActionException was not thrown.');
@@ -60,7 +60,7 @@ class ErrorHandlingTest extends TestCase
         $this->expectExceptionMessage('Something went wrong');
 
         $bayarcash->createSubscription([
-            'portal_key' => 'pk_test_portal', 'customer_id' => 'bcus_1', 'plan_id' => 'bpln_1',
+            'portal_key' => 'pk_test_portal', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1',
         ]);
     }
 
@@ -89,7 +89,7 @@ class ErrorHandlingTest extends TestCase
 
         try {
             $bayarcash->createSubscription([
-                'portal_key' => 'pk_wrong', 'customer_id' => 'bcus_1', 'plan_id' => 'bpln_1',
+                'portal_key' => 'pk_wrong', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1',
                 'start_date' => '2026-07-01T09:00:00+08:00',
             ]);
             $this->fail('Expected ValidationException was not thrown.');
@@ -107,6 +107,6 @@ class ErrorHandlingTest extends TestCase
 
         $this->expectException(NotFoundException::class);
 
-        $bayarcash->getSubscription('bsub_missing');
+        $bayarcash->getSubscription('rsub_missing');
     }
 }

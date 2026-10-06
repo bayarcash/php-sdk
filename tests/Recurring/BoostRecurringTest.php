@@ -27,6 +27,10 @@ class BoostRecurringTest extends TestCase
         $this->assertSame('subscription', BoostRecurring::TYPE_SUBSCRIPTION);
         $this->assertSame('installment', BoostRecurring::TYPE_INSTALLMENT);
         $this->assertSame('on_demand', BoostRecurring::TYPE_ON_DEMAND);
-        $this->assertSame('P1M', BoostRecurring::INTERVAL_MONTHLY);
+        // The API accepts and returns only these words, never ISO durations.
+        $this->assertSame('day', BoostRecurring::INTERVAL_DAILY);
+        $this->assertSame('week', BoostRecurring::INTERVAL_WEEKLY);
+        $this->assertSame('month', BoostRecurring::INTERVAL_MONTHLY);
+        $this->assertSame('year', BoostRecurring::INTERVAL_YEARLY);
     }
 }
