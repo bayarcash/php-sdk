@@ -141,4 +141,56 @@ class CallbackVerificationTest extends TestCase
             self::SECRET
         ));
     }
+
+    public function test_return_url_landing_verifies_and_rejects_a_tampered_status(): void
+    {
+        // What the console appends to the merchant's return_url after an on-demand
+        // charge: the signed thirteen, then datetime and checksum outside the signature.
+        $signed = [
+            'recurring_intent_id' => 'rint_a1b2c3',
+            'recurring_type' => 'on_demand',
+            'status' => 'completed',
+            'customer_id' => 'rcus_1',
+            'subscription_id' => '',
+            'installment_id' => '',
+            'transaction_id' => 'trx_9',
+            'exchange_reference_number' => 'BPGR-2026100700000021',
+            'exchange_transaction_id' => 'aa9757ea-ee89-46d0-8107-62f0b1d209bb',
+            'currency' => 'MYR',
+            'amount' => '120.00',
+            'transaction_status' => '3',
+            'transaction_status_description' => 'Successful',
+        ];
+        $query = $signed + ['datetime' => '2026-10-07T10:15:00+08:00', 'checksum' => $this->sign($signed)];
+        $sdk = new Bayarcash('t');
+
+        $this->assertTrue($sdk->verifyRecurringReturnUrlData($query, self::SECRET));
+
+        $query['status'] = 'failed';
+        $this->assertFalse($sdk->verifyRecurringReturnUrlData($query, self::SECRET));
+    }
+
+    public function test_return_url_landing_verifies_an_enrolment_before_its_first_charge(): void
+    {
+        $signed = [
+            'recurring_intent_id' => 'rint_a1b2c3',
+            'recurring_type' => 'subscription',
+            'status' => 'completed',
+            'customer_id' => 'rcus_1',
+            'subscription_id' => 'rsub_1',
+            'installment_id' => '',
+            'transaction_id' => '',
+            'exchange_reference_number' => '',
+            'exchange_transaction_id' => '',
+            'currency' => 'MYR',
+            'amount' => '',
+            'transaction_status' => '',
+            'transaction_status_description' => '',
+        ];
+
+        $this->assertTrue((new Bayarcash('t'))->verifyRecurringReturnUrlData(
+            $signed + ['checksum' => $this->sign($signed)],
+            self::SECRET
+        ));
+    }
 }

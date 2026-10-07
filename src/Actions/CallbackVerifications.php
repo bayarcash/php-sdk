@@ -173,6 +173,21 @@ trait CallbackVerifications
         ]);
     }
 
+    /**
+     * The payer's landing on your recurring return_url after an enrolment or an
+     * on-demand charge: the intent's outcome (`status` as GET /recurring-intents/{id}
+     * reports it) and the charge's details, signed like a one-off return_url landing.
+     * The transaction fields are '' until the charge is booked.
+     */
+    public function verifyRecurringReturnUrlData(array $queryData, string $secretKey): bool
+    {
+        return $this->verifyFixedFieldChecksum($queryData, $secretKey, [
+            'recurring_intent_id', 'recurring_type', 'status', 'customer_id', 'subscription_id', 'installment_id',
+            'transaction_id', 'exchange_reference_number', 'exchange_transaction_id', 'currency', 'amount',
+            'transaction_status', 'transaction_status_description',
+        ]);
+    }
+
     /** ksort + implode('|') + HMAC-SHA256 over a fixed field list, '' for anything absent. */
     protected function verifyFixedFieldChecksum(array $callbackData, string $secretKey, array $fields): bool
     {
