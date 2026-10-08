@@ -17,6 +17,8 @@ class InstallmentResource extends Resource
     public ?int $installmentCount = null;
     public ?string $description = null;
     public ?string $status = null;
+    /** Why it is paused: payment_failed, merchant or provider. Null when not paused. */
+    public ?string $pausedReason = null;
     public ?string $nextPaymentDate = null;
     public ?string $createdAt = null;
 }
