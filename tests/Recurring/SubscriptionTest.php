@@ -95,6 +95,18 @@ class SubscriptionTest extends TestCase
         $this->assertStringContainsString('subscriptions/rsub_1', (string) $this->lastRequest()->getUri());
     }
 
+    public function test_get_subscription_carries_the_card_it_bills(): void
+    {
+        $bayarcash = $this->sdk([
+            $this->json(['type' => 'subscription', 'id' => 'rsub_1', 'status' => 'active',
+                'card' => ['last4' => '1118', 'brand' => null, 'exp_month' => 12, 'exp_year' => 2030]]),
+            $this->json(['type' => 'subscription', 'id' => 'rsub_2', 'status' => 'pending', 'card' => null]),
+        ]);
+
+        $this->assertSame(['last4' => '1118', 'brand' => null, 'exp_month' => 12, 'exp_year' => 2030], $bayarcash->getSubscription('rsub_1')->card);
+        $this->assertNull($bayarcash->getSubscription('rsub_2')->card);
+    }
+
     public function test_update_subscription_patches_status(): void
     {
         $bayarcash = $this->sdk([$this->json(['id' => 'rsub_1', 'status' => 'paused'])]);
