@@ -16,6 +16,10 @@ class InstallmentResource extends Resource
     public ?string $interval = null;
     public ?int $installmentCount = null;
     public ?string $description = null;
+    /**
+     * pending, active, paused, canceled, terminated, failed, or completed (every instalment
+     * collected; the provider itself ends such a plan as terminated).
+     */
     public ?string $status = null;
     /** Why it is paused: payment_failed, merchant or provider. Null when not paused. */
     public ?string $pausedReason = null;
