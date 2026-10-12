@@ -12,13 +12,17 @@ class BoostRecurring
     const TYPE_ON_DEMAND = 'on_demand';
 
     /*
-     * Subscription / Installment lifecycle statuses (note: American spelling 'canceled')
+     * Subscription / Installment lifecycle statuses (note: American spelling 'canceled').
+     * `failed`: the enrolment's card authorization failed. `completed` (installments only):
+     * every instalment was collected. Both are over, like canceled and terminated.
      */
     const STATUS_PENDING = 'pending';
     const STATUS_ACTIVE = 'active';
     const STATUS_PAUSED = 'paused';
     const STATUS_CANCELED = 'canceled';
     const STATUS_TERMINATED = 'terminated';
+    const STATUS_FAILED = 'failed';
+    const STATUS_COMPLETED = 'completed';
 
     /*
      * Billing intervals (plan / installment 'interval') — the only values the API
@@ -37,6 +41,8 @@ class BoostRecurring
             self::STATUS_PAUSED => 'Paused',
             self::STATUS_CANCELED => 'Canceled',
             self::STATUS_TERMINATED => 'Terminated',
+            self::STATUS_FAILED => 'Failed',
+            self::STATUS_COMPLETED => 'Completed',
         ];
     }
 
@@ -49,6 +55,6 @@ class BoostRecurring
 
     public static function isTerminalStatus($status): bool
     {
-        return in_array($status, [self::STATUS_CANCELED, self::STATUS_TERMINATED], true);
+        return in_array($status, [self::STATUS_CANCELED, self::STATUS_TERMINATED, self::STATUS_FAILED, self::STATUS_COMPLETED], true);
     }
 }

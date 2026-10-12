@@ -20,6 +20,20 @@ class BoostRecurringTest extends TestCase
         $this->assertTrue(BoostRecurring::isTerminalStatus('terminated'));
         $this->assertFalse(BoostRecurring::isTerminalStatus('active'));
         $this->assertFalse(BoostRecurring::isTerminalStatus('paused'));
+        $this->assertFalse(BoostRecurring::isTerminalStatus('pending'));
+    }
+
+    public function test_ended_statuses_the_api_reports_are_known_and_terminal(): void
+    {
+        // The console's vocabulary (decision 2026-10-12): `failed` is an enrolment whose
+        // card authorization failed; `completed` is an installment plan whose every
+        // instalment was collected. Both are over - no polling, no pause/cancel.
+        $this->assertSame('failed', BoostRecurring::STATUS_FAILED);
+        $this->assertSame('completed', BoostRecurring::STATUS_COMPLETED);
+        $this->assertSame('Failed', BoostRecurring::getStatusText('failed'));
+        $this->assertSame('Completed', BoostRecurring::getStatusText('completed'));
+        $this->assertTrue(BoostRecurring::isTerminalStatus('failed'));
+        $this->assertTrue(BoostRecurring::isTerminalStatus('completed'));
     }
 
     public function test_type_and_interval_constants(): void
