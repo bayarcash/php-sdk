@@ -168,7 +168,7 @@ trait CallbackVerifications
     {
         return $this->verifyFixedFieldChecksum($callbackData, $secretKey, [
             'record_type', 'event', 'subscription_id', 'installment_id', 'customer_id', 'plan_id',
-            'status', 'previous_status', 'paused_reason', 'next_payment_date',
+            'status', 'paused_reason', 'next_payment_date',
             'total_amount', 'installment_count', 'remaining_amount', 'datetime',
         ]);
     }
