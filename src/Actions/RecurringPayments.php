@@ -4,6 +4,7 @@ namespace Webimpian\BayarcashSdk\Actions;
 
 use Webimpian\BayarcashSdk\Resources\CustomerResource;
 use Webimpian\BayarcashSdk\Resources\InstallmentResource;
+use Webimpian\BayarcashSdk\Resources\PaymentIntentResource;
 use Webimpian\BayarcashSdk\Resources\PlanResource;
 use Webimpian\BayarcashSdk\Resources\RecurringIntentResource;
 use Webimpian\BayarcashSdk\Resources\SubscriptionResource;
@@ -65,19 +66,41 @@ trait RecurringPayments
     }
 
     /**
-     * Hosted page where the customer saves a card for later on-demand charges.
+     * Save a card for the customer: creates a Credit Card payment intent that
+     * also vaults the payer's card against the customer, for later on-demand
+     * charges. Redirect the payer to the returned intent's `url`, exactly as
+     * for createPaymentIntent().
+     *
+     * `$data` is the createPaymentIntent() body less the payer (portal_key,
+     * order_number, amount, optional checksum, ...) plus the required
+     * `tokenize`, posted as given. The payer's name, email and phone come off
+     * the customer record; any sent are ignored by the API.
+     *   - `capture`       charges the amount and saves the card; minimum 2.00.
+     *   - `validate_only` authorizes the amount and saves the card, no money
+     *                     moves; minimum 1.00.
+     * `payment_channel` may be left out (the API defaults it to Credit Card,
+     * 12); any other channel is refused with 422.
+     *
+     * The card is saved once the payment succeeds (capture) or is authorized
+     * (validate_only) — getPaymentIntent() then reads `paid` or `authorized`
+     * and echoes `tokenize`.
      *
      * The key is optional on the API, but with one a retry replays the first
-     * hosted `payment_url` instead of opening a second card authorization.
+     * payment intent instead of creating a second one.
+     *
+     * @return PaymentIntentResource
      */
-    public function saveCard(string $customerId, ?string $idempotencyKey = null)
+    public function saveCard(string $customerId, array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('saveCard');
 
-        return $this->post(
-            'customers/' . $customerId . '/save-card',
-            [],
-            $this->idempotencyHeaders($idempotencyKey)
+        return new PaymentIntentResource(
+            $this->post(
+                'customers/' . $customerId . '/save-card',
+                ['json' => $data],
+                $this->idempotencyHeaders($idempotencyKey)
+            ),
+            $this
         );
     }
 

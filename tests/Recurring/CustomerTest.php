@@ -4,6 +4,7 @@ namespace Webimpian\BayarcashSdk\Tests\Recurring;
 
 use Webimpian\BayarcashSdk\Fpx;
 use Webimpian\BayarcashSdk\Resources\CustomerResource;
+use Webimpian\BayarcashSdk\Resources\PaymentIntentResource;
 use Webimpian\BayarcashSdk\Resources\TransactionResource;
 use Webimpian\BayarcashSdk\Tests\TestCase;
 
@@ -55,7 +56,7 @@ class CustomerTest extends TestCase
             $this->json(['id' => 'rpln_1'], 201),
             $this->json(['id' => 'rint_1'], 201),
             $this->json(['id' => 'rint_2'], 201),
-            $this->json(['payment_url' => 'https://pay']),
+            $this->json(self::saveCardIntent(), 201),
         ]);
 
         // The API answers 422 without the header on these POSTs.
@@ -63,7 +64,7 @@ class CustomerTest extends TestCase
         $bayarcash->createPlan(['name' => 'Pro', 'price' => 10, 'interval' => 'month']);
         $bayarcash->createSubscription(['portal_key' => 'pk', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1']);
         $bayarcash->createInstallment(['portal_key' => 'pk', 'customer_id' => 'rcus_1', 'total_amount' => 600]);
-        $bayarcash->saveCard('rcus_1');
+        $bayarcash->saveCard('rcus_1', self::saveCardBody());
 
         $keys = array_map(function ($entry) {
             return $entry['request']->getHeaderLine('Idempotency-Key');
@@ -81,9 +82,9 @@ class CustomerTest extends TestCase
 
     public function test_save_card_sends_the_given_idempotency_key(): void
     {
-        $bayarcash = $this->sdk([$this->json(['payment_url' => 'https://pay'])]);
+        $bayarcash = $this->sdk([$this->json(self::saveCardIntent(), 201)]);
 
-        $bayarcash->saveCard('rcus_1', 'card-key-1');
+        $bayarcash->saveCard('rcus_1', self::saveCardBody(), 'card-key-1');
 
         $this->assertSame('card-key-1', $this->lastRequest()->getHeaderLine('Idempotency-Key'));
     }
@@ -180,19 +181,99 @@ class CustomerTest extends TestCase
         $this->assertStringContainsString('customers/rcus_9', (string) $this->lastRequest()->getUri());
     }
 
-    public function test_save_card_returns_the_hosted_page_payload(): void
+    public function test_save_card_posts_the_body_as_given_and_returns_the_payment_intent(): void
     {
         $bayarcash = $this->sdk([
-            $this->json(['type' => 'save_card', 'status' => 'pending', 'payment_url' => 'https://pay']),
+            $this->json(self::saveCardIntent(['tokenize' => 'validate_only', 'amount' => 1.0]), 201),
         ]);
 
-        $result = $bayarcash->saveCard('rcus_9');
+        $body = self::saveCardBody(['tokenize' => 'validate_only', 'amount' => '1.00', 'checksum' => 'abc123']);
+        $intent = $bayarcash->saveCard('rcus_9', $body);
 
-        $this->assertSame('https://pay', $result['payment_url']);
-        $this->assertSame('POST', $this->lastRequest()->getMethod());
-        $this->assertStringContainsString('customers/rcus_9/save-card', (string) $this->lastRequest()->getUri());
-        // Nothing is minted here, so the request carries no body at all.
-        $this->assertSame('', (string) $this->lastRequest()->getBody());
+        $request = $this->lastRequest();
+        $this->assertSame('POST', $request->getMethod());
+        $this->assertStringEndsWith('customers/rcus_9/save-card', $request->getUri()->getPath());
+        $this->assertStringContainsString('application/json', $request->getHeaderLine('Content-Type'));
+        // Pass-through: exactly what the caller gave, tokenize and checksum included.
+        $this->assertSame($body, $this->lastBody());
+
+        $this->assertInstanceOf(PaymentIntentResource::class, $intent);
+        $this->assertSame('payment_intent', $intent->type);
+        $this->assertSame('pi_save1', $intent->id);
+        $this->assertSame('validate_only', $intent->tokenize);
+        $this->assertSame('https://console.example/payment-intent/pi_save1', $intent->url);
+        $this->assertSame('ORD-1', $intent->orderNumber);
+        $this->assertSame(1.0, $intent->amount);
+        $this->assertSame(12, $intent->paymentChannel);
+    }
+
+    public function test_get_payment_intent_maps_tokenize_and_the_authorized_status(): void
+    {
+        // GET /payment-intents/{id} answers 201 (the api resource sets it).
+        $bayarcash = $this->sdk([
+            $this->json([
+                'type' => 'payment_intent',
+                'id' => 'pi_save1',
+                'status' => 'authorized',
+                'last_attempt' => '2026-10-13 10:00:00',
+                'paid_at' => '',
+                'order_number' => 'ORD-1',
+                'amount' => 1.0,
+                'currency' => 'MYR',
+                'payer_name' => 'Jane Doe',
+                'payer_email' => 'jane@example.com',
+                'payer_telephone_number' => '60123456789',
+                'payment_gateway' => ['id' => 12, 'name' => 'Credit Card', 'code' => 'CREDIT_CARD'],
+                'tokenize' => 'validate_only',
+                'attempts' => [],
+            ], 201),
+        ]);
+
+        $intent = $bayarcash->getPaymentIntent('pi_save1');
+
+        $this->assertInstanceOf(PaymentIntentResource::class, $intent);
+        $this->assertSame('authorized', $intent->status);
+        $this->assertSame('validate_only', $intent->tokenize);
+        $this->assertStringEndsWith('payment-intents/pi_save1', $this->lastRequest()->getUri()->getPath());
+    }
+
+    public function test_a_payment_intent_without_tokenize_reads_null(): void
+    {
+        $intent = new PaymentIntentResource(['type' => 'payment_intent', 'id' => 'pi_1']);
+
+        $this->assertNull($intent->tokenize);
+    }
+
+    /** A save-card request body: the POST /payment-intents fields plus tokenize. */
+    private static function saveCardBody(array $overrides = []): array
+    {
+        return array_merge([
+            'portal_key' => 'pk_1',
+            'order_number' => 'ORD-1',
+            'amount' => '2.00',
+            'payer_name' => 'Jane Doe',
+            'payer_email' => 'jane@example.com',
+            'payer_telephone_number' => '60123456789',
+            'payment_channel' => [12],
+            'tokenize' => 'capture',
+        ], $overrides);
+    }
+
+    /** The 201 body exactly as the api's PaymentIntentController::prepareOutputData() builds it. */
+    private static function saveCardIntent(array $overrides = []): array
+    {
+        return array_merge([
+            'type' => 'payment_intent',
+            'id' => 'pi_save1',
+            'payer_name' => 'Jane Doe',
+            'payer_email' => 'jane@example.com',
+            'payer_telephone_number' => '60123456789',
+            'order_number' => 'ORD-1',
+            'amount' => 2.0,
+            'payment_channel' => 12,
+            'url' => 'https://console.example/payment-intent/pi_save1',
+            'tokenize' => 'capture',
+        ], $overrides);
     }
 
     public function test_recurring_methods_require_v3(): void

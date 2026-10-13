@@ -19,4 +19,6 @@ class PaymentIntentResource extends Resource
     public ?string $paidAt;
     public string $currency;
     public array $attempts;
+    /** Save-card intents only: `capture` or `validate_only`; null on any other intent. */
+    public ?string $tokenize = null;
 }
