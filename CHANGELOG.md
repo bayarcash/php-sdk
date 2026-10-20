@@ -5,12 +5,26 @@ All notable changes to will be documented in this file.
 ## Unreleased
 ### Added
 - `getCustomerPayments($customerId, $page, $perPage)` — every charge for a customer, including on-demand charges.
-- `verifyRecurringChargeCallbackData()` and `verifyRecurringLifecycleCallbackData()` for the two recurring webhooks.
-- `RecurringIntentResource`: `failureReason`, `subscriptionId`, `installmentId`, `transactionId`.
+- `verifyRecurringChargeCallbackData()` for the recurring charge callback — the only recurring webhook, sent for
+  every charge on every status change; it signs the card the charge ran on (`card_brand`, `card_country`,
+  `card_last4`, `card_exp_month`, `card_exp_year`).
+- `verifyRecurringReturnUrlData()` for the signed landing on the recurring `return_url` (twelve fields + datetime + checksum).
+- `SubscriptionResource` / `InstallmentResource`: `redirectUrl` (the provider's card page, on the create answer only)
+  and `card['country']`. `BoostRecurring::STATUS_EXPIRED` (nobody completed the card page), terminal and labelled.
 - `TransactionResource`: `recurringCustomerId`, `subscription`, `installment`. `SubscriptionResource`: `plan`.
 - `saveCard()` takes an optional Idempotency-Key.
+- `BoostRecurring::STATUS_FAILED` and `STATUS_COMPLETED` (installments only); both count in `isTerminalStatus()`
+  and have a `getStatusText()` label.
 
 ### Changed
+- **Breaking:** `createSubscription()` / `createInstallment()` create the agreement at the provider and return the
+  `pending` `SubscriptionResource` / `InstallmentResource` with `redirectUrl` — redirect the buyer there — instead
+  of a recurring intent with `url`. `createOnDemandPayment()` charges the saved card synchronously and returns the
+  charge as a `TransactionResource` (no `return_url`); a customer with no saved card is a 422 `customer_no_saved_card`.
+- **Breaking:** `saveCard($customerId, array $data, $idempotencyKey = null)` creates a Credit Card payment intent that
+  also saves the card: `$data` is the `createPaymentIntent()` body less the payer plus `tokenize` (`capture`, minimum
+  2.00, or `validate_only`, minimum 1.00). The payer's name, email and phone come off the customer record. It returns a `PaymentIntentResource` — redirect to `->url` — instead of
+  `['payment_url' => ...]`. `PaymentIntentResource` gains `tokenize`; a `validate_only` intent reads `authorized`.
 - `createCustomer`, `createPlan`, `createSubscription`, `createInstallment` and `saveCard` now always send an
   `Idempotency-Key`, generating a UUID v4 when none is passed (the API requires it on the minting POSTs).
 - `BoostRecurring::INTERVAL_*` are now `day`/`week`/`month`/`year` (the API rejects ISO durations).
@@ -19,6 +33,8 @@ All notable changes to will be documented in this file.
 - **Breaking:** `getSubscription()` / `getInstallment()` no longer carry `->charges` (the API stopped embedding them).
 
 ### Removed
+- `RecurringIntentResource`, `getRecurringIntent()` and `verifyRecurringLifecycleCallbackData()` — there are no
+  recurring intents and no lifecycle webhook; an agreement's state is read with `getSubscription()` / `getInstallment()`.
 - `PaymentResource`, `ChargeResource` and the `BoostRecurring::PAYMENT_*` constants — charges are transaction records,
   whose status is the `Fpx::STATUS_*` code.
 

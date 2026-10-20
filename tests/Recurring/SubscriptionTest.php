@@ -2,25 +2,23 @@
 
 namespace Webimpian\BayarcashSdk\Tests\Recurring;
 
-use Webimpian\BayarcashSdk\Resources\RecurringIntentResource;
 use Webimpian\BayarcashSdk\Resources\SubscriptionResource;
 use Webimpian\BayarcashSdk\Resources\TransactionResource;
 use Webimpian\BayarcashSdk\Tests\TestCase;
 
 class SubscriptionTest extends TestCase
 {
-    public function test_create_subscription_returns_recurring_intent_with_url(): void
+    public function test_create_subscription_returns_the_pending_subscription_with_its_card_page(): void
     {
         $bayarcash = $this->sdk([
             $this->json([
-                'type' => 'recurring_intent', 'id' => 'rint_1', 'portal_key' => 'pk_test_portal',
-                'recurring_type' => 'subscription', 'status' => 'pending',
-                'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1',
-                'url' => 'https://console/authorize/rint_1',
+                'type' => 'subscription', 'id' => 'rsub_1', 'portal_key' => 'pk_test_portal',
+                'status' => 'pending', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1',
+                'card' => null, 'redirect_url' => 'https://boost.example/card/abc',
             ], 201),
         ]);
 
-        $intent = $bayarcash->createSubscription([
+        $subscription = $bayarcash->createSubscription([
             'portal_key' => 'pk_test_portal',
             'customer_id' => 'rcus_1',
             'plan_id' => 'rpln_1',
@@ -29,10 +27,11 @@ class SubscriptionTest extends TestCase
             'return_url' => 'https://m/return',
         ]);
 
-        $this->assertInstanceOf(RecurringIntentResource::class, $intent);
-        $this->assertSame('subscription', $intent->recurringType);
-        $this->assertSame('pk_test_portal', $intent->portalKey);
-        $this->assertSame('https://console/authorize/rint_1', $intent->url);
+        $this->assertInstanceOf(SubscriptionResource::class, $subscription);
+        $this->assertSame('rsub_1', $subscription->id);
+        $this->assertSame('pending', $subscription->status);
+        $this->assertSame('pk_test_portal', $subscription->portalKey);
+        $this->assertSame('https://boost.example/card/abc', $subscription->redirectUrl);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('subscriptions', (string) $this->lastRequest()->getUri());
         $this->assertSame('rpln_1', $this->lastBody()['plan_id']);
@@ -41,7 +40,7 @@ class SubscriptionTest extends TestCase
 
     public function test_create_subscription_requires_a_portal_key(): void
     {
-        $bayarcash = $this->sdk([$this->json(['id' => 'rint_1'], 201)]);
+        $bayarcash = $this->sdk([$this->json(['id' => 'rsub_1'], 201)]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Required field 'portal_key' is missing");
@@ -51,7 +50,7 @@ class SubscriptionTest extends TestCase
 
     public function test_create_subscription_accepts_inline_customer(): void
     {
-        $bayarcash = $this->sdk([$this->json(['id' => 'rint_1', 'recurring_type' => 'subscription'], 201)]);
+        $bayarcash = $this->sdk([$this->json(['id' => 'rsub_1', 'status' => 'pending'], 201)]);
 
         $bayarcash->createSubscription([
             'portal_key' => 'pk_test_portal',
@@ -99,11 +98,13 @@ class SubscriptionTest extends TestCase
     {
         $bayarcash = $this->sdk([
             $this->json(['type' => 'subscription', 'id' => 'rsub_1', 'status' => 'active',
-                'card' => ['last4' => '1118', 'brand' => null, 'exp_month' => 12, 'exp_year' => 2030]]),
+                'card' => ['last4' => '1118', 'brand' => null, 'country' => 'MY', 'exp_month' => 12, 'exp_year' => 2030]]),
             $this->json(['type' => 'subscription', 'id' => 'rsub_2', 'status' => 'pending', 'card' => null]),
         ]);
 
-        $this->assertSame(['last4' => '1118', 'brand' => null, 'exp_month' => 12, 'exp_year' => 2030], $bayarcash->getSubscription('rsub_1')->card);
+        $subscription = $bayarcash->getSubscription('rsub_1');
+        $this->assertSame(['last4' => '1118', 'brand' => null, 'country' => 'MY', 'exp_month' => 12, 'exp_year' => 2030], $subscription->card);
+        $this->assertNull($subscription->redirectUrl); // only a create answers the card page
         $this->assertNull($bayarcash->getSubscription('rsub_2')->card);
     }
 

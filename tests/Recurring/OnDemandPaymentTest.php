@@ -3,34 +3,29 @@
 namespace Webimpian\BayarcashSdk\Tests\Recurring;
 
 use Webimpian\BayarcashSdk\Fpx;
-use Webimpian\BayarcashSdk\Resources\RecurringIntentResource;
 use Webimpian\BayarcashSdk\Resources\TransactionResource;
 use Webimpian\BayarcashSdk\Tests\TestCase;
 
 class OnDemandPaymentTest extends TestCase
 {
-    public function test_create_on_demand_payment_returns_intent_and_sends_idempotency_key(): void
+    public function test_create_on_demand_payment_returns_the_charge_and_sends_idempotency_key(): void
     {
         $bayarcash = $this->sdk([
-            $this->json([
-                'type' => 'recurring_intent', 'id' => 'rint_3', 'portal_key' => 'pk_test_portal',
-                'recurring_type' => 'on_demand',
-                'status' => 'pending', 'amount' => 25.0, 'description' => 'Top up',
-                'url' => 'https://console/authorize/rint_3',
-            ], 201),
+            $this->json(CustomerTest::chargeRow(['id' => 'trx_3', 'exchange_transaction_id' => 'chg-3', 'amount' => 25.0]), 201),
         ]);
 
-        $intent = $bayarcash->createOnDemandPayment([
+        $charge = $bayarcash->createOnDemandPayment([
             'portal_key' => 'pk_test_portal',
             'customer_id' => 'rcus_1',
             'amount' => 25.00,
             'description' => 'Top up',
         ], 'idem-key-1');
 
-        $this->assertInstanceOf(RecurringIntentResource::class, $intent);
-        $this->assertSame('on_demand', $intent->recurringType);
-        $this->assertSame('pk_test_portal', $intent->portalKey);
-        $this->assertSame('https://console/authorize/rint_3', $intent->url);
+        $this->assertInstanceOf(TransactionResource::class, $charge);
+        $this->assertSame('trx_3', $charge->id);
+        $this->assertSame('chg-3', $charge->exchangeTransactionId);
+        $this->assertEquals(Fpx::STATUS_SUCCESS, $charge->status);
+        $this->assertSame('rcus_1', $charge->recurringCustomerId);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('payments', (string) $this->lastRequest()->getUri());
         $this->assertSame('idem-key-1', $this->lastRequest()->getHeaderLine('Idempotency-Key'));
@@ -40,7 +35,7 @@ class OnDemandPaymentTest extends TestCase
 
     public function test_create_on_demand_payment_requires_a_portal_key(): void
     {
-        $bayarcash = $this->sdk([$this->json(['id' => 'rint_3'], 201)]);
+        $bayarcash = $this->sdk([$this->json(['id' => 'trx_3'], 201)]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Required field 'portal_key' is missing");
@@ -50,7 +45,7 @@ class OnDemandPaymentTest extends TestCase
 
     public function test_create_on_demand_payment_auto_generates_idempotency_key_when_omitted(): void
     {
-        $bayarcash = $this->sdk([$this->json(['id' => 'rint_3', 'recurring_type' => 'on_demand'], 201)]);
+        $bayarcash = $this->sdk([$this->json(['id' => 'trx_3', 'status' => '3'], 201)]);
 
         $bayarcash->createOnDemandPayment([
             'portal_key' => 'pk_test_portal',
@@ -84,42 +79,5 @@ class OnDemandPaymentTest extends TestCase
         $this->assertEquals(Fpx::STATUS_SUCCESS, $payment->status);
         $this->assertSame('rcus_1', $payment->recurringCustomerId);
         $this->assertStringContainsString('payments/chg-9', (string) $this->lastRequest()->getUri());
-    }
-
-    public function test_failed_on_demand_intent_exposes_reason_and_transaction_id(): void
-    {
-        $bayarcash = $this->sdk([
-            $this->json([
-                'type' => 'recurring_intent', 'id' => 'rint_9', 'recurring_type' => 'on_demand',
-                'status' => 'failed', 'failure_reason' => 'Card declined', 'transaction_id' => 'trx_9',
-            ]),
-        ]);
-
-        $intent = $bayarcash->getRecurringIntent('rint_9');
-
-        $this->assertSame('failed', $intent->status);
-        $this->assertSame('Card declined', $intent->failureReason);
-        $this->assertSame('trx_9', $intent->transactionId);
-    }
-
-    public function test_get_recurring_intent_resolves_status_by_intent_id(): void
-    {
-        $bayarcash = $this->sdk([
-            $this->json([
-                'type' => 'recurring_intent', 'id' => 'rint_9', 'recurring_type' => 'on_demand',
-                'status' => 'completed', 'amount' => 25.0, 'description' => 'Top up',
-                'url' => 'https://console/authorize/rint_9',
-            ]),
-        ]);
-
-        // At return time the merchant holds the intent id (rint_...), not a trx_ id.
-        $intent = $bayarcash->getRecurringIntent('rint_9');
-
-        $this->assertInstanceOf(RecurringIntentResource::class, $intent);
-        $this->assertSame('rint_9', $intent->id);
-        $this->assertSame('completed', $intent->status);
-        $this->assertSame('on_demand', $intent->recurringType);
-        $this->assertSame('GET', $this->lastRequest()->getMethod());
-        $this->assertStringContainsString('recurring-intents/rint_9', (string) $this->lastRequest()->getUri());
     }
 }

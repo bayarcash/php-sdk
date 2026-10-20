@@ -4,24 +4,22 @@ namespace Webimpian\BayarcashSdk\Tests\Recurring;
 
 use Webimpian\BayarcashSdk\Resources\TransactionResource;
 use Webimpian\BayarcashSdk\Resources\InstallmentResource;
-use Webimpian\BayarcashSdk\Resources\RecurringIntentResource;
 use Webimpian\BayarcashSdk\Tests\TestCase;
 
 class InstallmentTest extends TestCase
 {
-    public function test_create_installment_returns_recurring_intent(): void
+    public function test_create_installment_returns_the_pending_plan_with_its_card_page(): void
     {
         $bayarcash = $this->sdk([
             $this->json([
-                'type' => 'recurring_intent', 'id' => 'rint_2', 'portal_key' => 'pk_test_portal',
-                'recurring_type' => 'installment',
-                'status' => 'pending', 'total_amount' => 1200.0, 'installment_count' => 12,
+                'type' => 'installment', 'id' => 'rins_2', 'portal_key' => 'pk_test_portal',
+                'status' => 'pending', 'total_amount' => '1200.00', 'installment_count' => 12,
                 'interval' => 'month', 'description' => 'Laptop, 12 payments',
-                'url' => 'https://console/authorize/rint_2',
+                'redirect_url' => 'https://boost.example/card/def',
             ], 201),
         ]);
 
-        $intent = $bayarcash->createInstallment([
+        $installment = $bayarcash->createInstallment([
             'portal_key' => 'pk_test_portal',
             'customer_id' => 'rcus_1',
             'total_amount' => 1200.00,
@@ -31,22 +29,23 @@ class InstallmentTest extends TestCase
             'start_date' => '2026-07-01T09:00:00+08:00',
         ]);
 
-        $this->assertInstanceOf(RecurringIntentResource::class, $intent);
-        $this->assertSame('installment', $intent->recurringType);
-        $this->assertSame('pk_test_portal', $intent->portalKey);
-        $this->assertSame(12, $intent->installmentCount);
-        $this->assertSame('https://console/authorize/rint_2', $intent->url);
+        $this->assertInstanceOf(InstallmentResource::class, $installment);
+        $this->assertSame('rins_2', $installment->id);
+        $this->assertSame('pending', $installment->status);
+        $this->assertSame('pk_test_portal', $installment->portalKey);
+        $this->assertSame(12, $installment->installmentCount);
+        $this->assertSame('https://boost.example/card/def', $installment->redirectUrl);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('installments', (string) $this->lastRequest()->getUri());
         $this->assertSame(12, $this->lastBody()['installment_count']);
         $this->assertSame('pk_test_portal', $this->lastBody()['portal_key']);
         $this->assertSame('Laptop, 12 payments', $this->lastBody()['description']);
-        $this->assertSame('Laptop, 12 payments', $intent->description);
+        $this->assertSame('Laptop, 12 payments', $installment->description);
     }
 
     public function test_create_installment_requires_a_portal_key(): void
     {
-        $bayarcash = $this->sdk([$this->json(['id' => 'rint_2'], 201)]);
+        $bayarcash = $this->sdk([$this->json(['id' => 'rins_2'], 201)]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Required field 'portal_key' is missing");

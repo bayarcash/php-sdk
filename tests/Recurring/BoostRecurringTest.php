@@ -34,6 +34,9 @@ class BoostRecurringTest extends TestCase
         $this->assertSame('Completed', BoostRecurring::getStatusText('completed'));
         $this->assertTrue(BoostRecurring::isTerminalStatus('failed'));
         $this->assertTrue(BoostRecurring::isTerminalStatus('completed'));
+        $this->assertSame('expired', BoostRecurring::STATUS_EXPIRED);
+        $this->assertTrue(BoostRecurring::isTerminalStatus('expired'));
+        $this->assertSame('Expired', BoostRecurring::getStatusText('expired'));
     }
 
     public function test_type_and_interval_constants(): void

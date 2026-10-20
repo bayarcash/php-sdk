@@ -40,7 +40,11 @@ class CallbackVerificationTest extends TestCase
             'subscription_id' => 'rsub_1',
             'installment_id' => null,
             'customer_id' => 'rcus_1',
-            'recurring_intent_id' => 'rint_1',
+            'card_brand' => 'visa',
+            'card_country' => 'MY',
+            'card_last4' => '1118',
+            'card_exp_month' => '12',
+            'card_exp_year' => '2030',
         ];
     }
 
@@ -63,12 +67,33 @@ class CallbackVerificationTest extends TestCase
         $this->assertTrue((new Bayarcash('t'))->verifyRecurringChargeCallbackData($body, self::SECRET));
     }
 
-    public function test_charge_callback_signs_the_recurring_intent_id(): void
+    public function test_charge_callback_signs_the_card_it_ran_on(): void
     {
         $body = $this->received($this->chargeFields());
-        $body['recurring_intent_id'] = 'rint_other';
+        $body['card_last4'] = '9999';
 
         $this->assertFalse((new Bayarcash('t'))->verifyRecurringChargeCallbackData($body, self::SECRET));
+    }
+
+    public function test_charge_callback_verifies_a_failed_charge_without_a_card(): void
+    {
+        $signed = array_merge($this->chargeFields(), [
+            'status' => '2', 'status_description' => 'Declined',
+            'card_brand' => null, 'card_country' => null, 'card_last4' => null,
+            'card_exp_month' => null, 'card_exp_year' => null,
+        ]);
+        $body = $this->received($signed);
+
+        $this->assertArrayNotHasKey('card_last4', $body);
+        $this->assertTrue((new Bayarcash('t'))->verifyRecurringChargeCallbackData($body, self::SECRET));
+    }
+
+    public function test_charge_callback_ignores_an_unsigned_extra_field(): void
+    {
+        // There is no recurring_intent_id any more; a stray key is not part of the checksum.
+        $body = $this->received($this->chargeFields()) + ['recurring_intent_id' => 'rint_1'];
+
+        $this->assertTrue((new Bayarcash('t'))->verifyRecurringChargeCallbackData($body, self::SECRET));
     }
 
     public function test_charge_callback_cannot_be_repointed_at_another_subscription(): void
@@ -90,66 +115,15 @@ class CallbackVerificationTest extends TestCase
         $this->assertFalse($sdk->verifyRecurringChargeCallbackData($body, self::SECRET));
     }
 
-    public function test_lifecycle_callback_verifies_for_an_installment(): void
-    {
-        $signed = [
-            'record_type' => 'recurring_installment',
-            'event' => 'status_updated',
-            'subscription_id' => '',
-            'installment_id' => 'rins_1',
-            'customer_id' => 'rcus_1',
-            'plan_id' => '',
-            'status' => 'paused',
-            'paused_reason' => 'payment_failed',
-            'next_payment_date' => '2026-11-06T10:15:00+08:00',
-            'total_amount' => '600.00',
-            'installment_count' => '6',
-            'remaining_amount' => '500.00',
-            'datetime' => '2026-10-06 10:15:00',
-        ];
-        $body = $signed + ['checksum' => $this->sign($signed)];
-        $sdk = new Bayarcash('t');
-
-        $this->assertTrue($sdk->verifyRecurringLifecycleCallbackData($body, self::SECRET));
-
-        $body['status'] = 'active';
-        $this->assertFalse($sdk->verifyRecurringLifecycleCallbackData($body, self::SECRET));
-    }
-
-    public function test_lifecycle_callback_verifies_an_enrolment_with_empty_fields(): void
-    {
-        $signed = [
-            'record_type' => 'recurring_subscription',
-            'event' => 'enrolment_completed',
-            'subscription_id' => 'rsub_1',
-            'installment_id' => '',
-            'customer_id' => 'rcus_1',
-            'plan_id' => 'rpln_1',
-            'status' => 'active',
-            'paused_reason' => '',
-            'next_payment_date' => '2026-11-06T10:15:00+08:00',
-            'total_amount' => '',
-            'installment_count' => '',
-            'remaining_amount' => '',
-            'datetime' => '2026-10-06 10:15:00',
-        ];
-
-        $this->assertTrue((new Bayarcash('t'))->verifyRecurringLifecycleCallbackData(
-            $signed + ['checksum' => $this->sign($signed)],
-            self::SECRET
-        ));
-    }
-
     public function test_return_url_landing_verifies_and_rejects_a_tampered_status(): void
     {
-        // What the console appends to the merchant's return_url after an on-demand
-        // charge: the signed thirteen, then datetime and checksum outside the signature.
+        // What the console appends to the merchant's return_url after the provider's
+        // card page: the signed twelve, then datetime and checksum outside the signature.
         $signed = [
-            'recurring_intent_id' => 'rint_a1b2c3',
-            'recurring_type' => 'on_demand',
-            'status' => 'completed',
+            'recurring_type' => 'subscription',
+            'status' => 'active',
             'customer_id' => 'rcus_1',
-            'subscription_id' => '',
+            'subscription_id' => 'rsub_1',
             'installment_id' => '',
             'transaction_id' => 'trx_9',
             'exchange_reference_number' => 'BPGR-2026100700000021',
@@ -168,12 +142,24 @@ class CallbackVerificationTest extends TestCase
         $this->assertFalse($sdk->verifyRecurringReturnUrlData($query, self::SECRET));
     }
 
+    public function test_return_url_landing_does_not_sign_a_recurring_intent_id(): void
+    {
+        $signed = [
+            'recurring_type' => 'installment', 'status' => 'expired', 'customer_id' => 'rcus_1',
+            'subscription_id' => '', 'installment_id' => 'rins_1', 'transaction_id' => '',
+            'exchange_reference_number' => '', 'exchange_transaction_id' => '', 'currency' => 'MYR',
+            'amount' => '', 'transaction_status' => '', 'transaction_status_description' => '',
+        ];
+        $query = $signed + ['recurring_intent_id' => 'rint_x', 'checksum' => $this->sign($signed)];
+
+        $this->assertTrue((new Bayarcash('t'))->verifyRecurringReturnUrlData($query, self::SECRET));
+    }
+
     public function test_return_url_landing_verifies_an_enrolment_before_its_first_charge(): void
     {
         $signed = [
-            'recurring_intent_id' => 'rint_a1b2c3',
             'recurring_type' => 'subscription',
-            'status' => 'completed',
+            'status' => 'pending',
             'customer_id' => 'rcus_1',
             'subscription_id' => 'rsub_1',
             'installment_id' => '',

@@ -143,12 +143,17 @@ trait CallbackVerifications
     }
 
     /**
-     * Recurring charge callback (record_type `recurring_charge`), sent for SUCCESSFUL
-     * subscription, installment and on-demand charges only.
+     * Recurring charge callback (record_type `recurring_charge`): the only recurring
+     * webhook, sent for EVERY charge (subscription, installment, on-demand, the first
+     * charge of an enrolment included) on every change of its status - pending (1),
+     * then successful (3) or failed (2).
      *
-     * The body is form-encoded, which drops null fields (order_number and
-     * payer_bank_name are always null here) while the checksum signs them as ''.
-     * So the field list is fixed and a missing field counts as ''.
+     * Signs the thirteen transaction-callback fields, the four that say what was
+     * charged, and the five that describe the card (never a token). The body is
+     * form-encoded, which drops null fields (order_number and payer_bank_name are
+     * always null here; the card fields are null on a charge that named no card)
+     * while the checksum signs them as ''. So the field list is fixed and a missing
+     * field counts as ''.
      */
     public function verifyRecurringChargeCallbackData(array $callbackData, string $secretKey): bool
     {
@@ -156,33 +161,23 @@ trait CallbackVerifications
             'record_type', 'transaction_id', 'exchange_reference_number', 'exchange_transaction_id',
             'order_number', 'currency', 'amount', 'payer_name', 'payer_email', 'payer_bank_name',
             'status', 'status_description', 'datetime',
-            'charge_source', 'subscription_id', 'installment_id', 'customer_id', 'recurring_intent_id',
+            'charge_source', 'subscription_id', 'installment_id', 'customer_id',
+            'card_brand', 'card_country', 'card_last4', 'card_exp_month', 'card_exp_year',
         ]);
     }
 
     /**
-     * Recurring lifecycle callback (record_type `recurring_subscription` or
-     * `recurring_installment`, event `enrolment_completed` or `status_updated`).
-     */
-    public function verifyRecurringLifecycleCallbackData(array $callbackData, string $secretKey): bool
-    {
-        return $this->verifyFixedFieldChecksum($callbackData, $secretKey, [
-            'record_type', 'event', 'subscription_id', 'installment_id', 'customer_id', 'plan_id',
-            'status', 'paused_reason', 'next_payment_date',
-            'total_amount', 'installment_count', 'remaining_amount', 'datetime',
-        ]);
-    }
-
-    /**
-     * The payer's landing on your recurring return_url after an enrolment or an
-     * on-demand charge: the intent's outcome (`status` as GET /recurring-intents/{id}
-     * reports it) and the charge's details, signed like a one-off return_url landing.
-     * The transaction fields are '' until the charge is booked.
+     * The payer's landing on your recurring return_url after the provider's card
+     * page of an enrolment: the agreement's state (`status` as getSubscription() /
+     * getInstallment() report it: pending, active, failed, expired, canceled, ...)
+     * and its first charge, signed like a one-off return_url landing. The
+     * transaction fields are '' until the first charge is booked. Verify, then read
+     * the agreement by id, then act.
      */
     public function verifyRecurringReturnUrlData(array $queryData, string $secretKey): bool
     {
         return $this->verifyFixedFieldChecksum($queryData, $secretKey, [
-            'recurring_intent_id', 'recurring_type', 'status', 'customer_id', 'subscription_id', 'installment_id',
+            'recurring_type', 'status', 'customer_id', 'subscription_id', 'installment_id',
             'transaction_id', 'exchange_reference_number', 'exchange_transaction_id', 'currency', 'amount',
             'transaction_status', 'transaction_status_description',
         ]);

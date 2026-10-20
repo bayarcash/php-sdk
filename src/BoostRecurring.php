@@ -5,7 +5,8 @@ namespace Webimpian\BayarcashSdk;
 class BoostRecurring
 {
     /*
-     * Recurring resource types (RecurringIntentResource->recurringType)
+     * Recurring agreement types (`recurring_type` on the return_url landing) and the
+     * `charge_source` of a charge callback.
      */
     const TYPE_SUBSCRIPTION = 'subscription';
     const TYPE_INSTALLMENT = 'installment';
@@ -13,13 +14,16 @@ class BoostRecurring
 
     /*
      * Subscription / Installment lifecycle statuses (note: American spelling 'canceled').
-     * `failed`: the enrolment's card authorization failed. `completed` (installments only):
-     * every instalment was collected. Both are over, like canceled and terminated.
+     * `pending`: created, the customer has not completed the provider's card page.
+     * `failed`: the customer's card was declined on that page. `expired`: nobody
+     * completed the page within 30 minutes of creation. `completed` (installments only):
+     * every instalment was collected. All four are over, like canceled and terminated.
      */
     const STATUS_PENDING = 'pending';
     const STATUS_ACTIVE = 'active';
     const STATUS_PAUSED = 'paused';
     const STATUS_CANCELED = 'canceled';
+    const STATUS_EXPIRED = 'expired';
     const STATUS_TERMINATED = 'terminated';
     const STATUS_FAILED = 'failed';
     const STATUS_COMPLETED = 'completed';
@@ -40,6 +44,7 @@ class BoostRecurring
             self::STATUS_ACTIVE => 'Active',
             self::STATUS_PAUSED => 'Paused',
             self::STATUS_CANCELED => 'Canceled',
+            self::STATUS_EXPIRED => 'Expired',
             self::STATUS_TERMINATED => 'Terminated',
             self::STATUS_FAILED => 'Failed',
             self::STATUS_COMPLETED => 'Completed',
@@ -55,6 +60,6 @@ class BoostRecurring
 
     public static function isTerminalStatus($status): bool
     {
-        return in_array($status, [self::STATUS_CANCELED, self::STATUS_TERMINATED, self::STATUS_FAILED, self::STATUS_COMPLETED], true);
+        return in_array($status, [self::STATUS_CANCELED, self::STATUS_EXPIRED, self::STATUS_TERMINATED, self::STATUS_FAILED, self::STATUS_COMPLETED], true);
     }
 }

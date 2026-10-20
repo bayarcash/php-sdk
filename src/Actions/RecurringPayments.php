@@ -6,17 +6,18 @@ use Webimpian\BayarcashSdk\Resources\CustomerResource;
 use Webimpian\BayarcashSdk\Resources\InstallmentResource;
 use Webimpian\BayarcashSdk\Resources\PaymentIntentResource;
 use Webimpian\BayarcashSdk\Resources\PlanResource;
-use Webimpian\BayarcashSdk\Resources\RecurringIntentResource;
 use Webimpian\BayarcashSdk\Resources\SubscriptionResource;
 use Webimpian\BayarcashSdk\Resources\TransactionResource;
 
 /**
  * Boost recurring-payment endpoints (v3 only).
  *
- * Customers and Plans return their resource directly on create. Subscriptions,
- * Installments and on-demand Payments return a RecurringIntentResource carrying
- * an authorization `url` — redirect the buyer there to authorize their card,
- * then fetch the eventual resource by id.
+ * Every create returns its resource directly. createSubscription() and
+ * createInstallment() create the agreement at the provider, `pending`, and
+ * return it with `redirectUrl` — the provider's card page: redirect the buyer
+ * there; the agreement is `active` once they complete it and the first charge
+ * is taken at that moment. createOnDemandPayment() charges the saved card
+ * synchronously and returns the charge as a TransactionResource.
  *
  * The three money requests — createSubscription, createInstallment and
  * createOnDemandPayment — REQUIRE `portal_key`: the merchant's portal key, the
@@ -28,7 +29,11 @@ use Webimpian\BayarcashSdk\Resources\TransactionResource;
  * on-demand payment) REQUIRES an `Idempotency-Key` header — the API answers 422
  * without one. The SDK generates a UUID v4 when the caller passes none; pass
  * your own (e.g. derived from your order id) to make a retry return the
- * original response instead of minting a second record or authorization link.
+ * original response instead of minting a second record, agreement or charge.
+ *
+ * The only webhook is the recurring charge callback (every charge, every status
+ * change; see CallbackVerifications::verifyRecurringChargeCallbackData()). An
+ * agreement's own state is read with getSubscription() / getInstallment().
  *
  * Charges are transaction records (TransactionResource, the same shape as
  * getTransaction()): `id` is the trx_ id, `status` is the Fpx::STATUS_* code
@@ -159,15 +164,17 @@ trait RecurringPayments
     /**
      * @param  array  $data  Subscription payload. `portal_key` is required, and
      *                       `start_date` must be a full ISO-8601 timestamp
-     *                       (e.g. "2026-07-01T09:00:00+08:00") in the future — a
-     *                       minute ahead is enough; a bare date is rejected.
+     *                       (e.g. "2026-07-01T09:00:00+08:00") at least an hour
+     *                       in the future; a bare date is rejected.
+     * @return SubscriptionResource  `pending`, with `redirectUrl` (the provider's
+     *                               card page) — redirect the buyer there.
      */
     public function createSubscription(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createSubscription');
         $this->requirePortalKey($data);
 
-        return new RecurringIntentResource(
+        return new SubscriptionResource(
             $this->post('subscriptions', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
             $this
         );
@@ -232,15 +239,17 @@ trait RecurringPayments
      *                       500 characters) is required, `interval` is one of
      *                       day|week|month|year (BoostRecurring::INTERVAL_*), and
      *                       `start_date` must be a full ISO-8601 timestamp
-     *                       (e.g. "2026-07-01T09:00:00+08:00") in the future — a
-     *                       bare date is rejected.
+     *                       (e.g. "2026-07-01T09:00:00+08:00") at least an hour
+     *                       in the future; a bare date is rejected.
+     * @return InstallmentResource  `pending`, with `redirectUrl` (the provider's
+     *                              card page) — redirect the buyer there.
      */
     public function createInstallment(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createInstallment');
         $this->requirePortalKey($data);
 
-        return new RecurringIntentResource(
+        return new InstallmentResource(
             $this->post('installments', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
             $this
         );
@@ -300,16 +309,22 @@ trait RecurringPayments
     // ---------------------------------------------------------------------
 
     /**
-     * Create a one-off on-demand charge against a customer's card-on-file.
+     * Charge a customer's saved card now. Synchronous: the answer is the charge
+     * itself, as a transaction record — `status` 3 successful, 2 declined (a
+     * decline is a charge that failed, not an exception), 1 still settling (its
+     * final status arrives on `callback_url`). A customer with no saved card is a
+     * 422 `customer_no_saved_card` (ValidationException): save one with
+     * saveCard() first. No `return_url`: there is no customer page.
      *
      * @param  array  $data  Payment payload. `portal_key` is required.
+     * @return TransactionResource
      */
     public function createOnDemandPayment(array $data, ?string $idempotencyKey = null)
     {
         $this->ensureV3('createOnDemandPayment');
         $this->requirePortalKey($data);
 
-        return new RecurringIntentResource(
+        return new TransactionResource(
             $this->post('payments', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
             $this
         );
@@ -324,26 +339,6 @@ trait RecurringPayments
         $this->ensureV3('getPayment');
 
         return new TransactionResource($this->get('payments/' . $paymentId), $this);
-    }
-
-    /**
-     * Resolve a recurring intent (rint_...) to its current status/outcome.
-     *
-     * When a payer is redirected back after authorizing a subscription/installment or
-     * an on-demand charge, the only id you hold is the intent id (returned by
-     * createSubscription/createInstallment/createOnDemandPayment) — NOT a transaction
-     * id. Call this to verify the outcome instead of trusting redirect query params.
-     * The resource's `status` is one of: pending, authorizing, processing, completed,
-     * failed, expired. A failed intent carries `failureReason`; a completed or failed
-     * on-demand intent carries `transactionId` (the trx_ id of the charge, or null
-     * when none was booked) — a failed charge sends no webhook, so this is the only
-     * place to learn about it.
-     */
-    public function getRecurringIntent(string $intentId)
-    {
-        $this->ensureV3('getRecurringIntent');
-
-        return new RecurringIntentResource($this->get('recurring-intents/' . $intentId), $this);
     }
 
     // ---------------------------------------------------------------------
