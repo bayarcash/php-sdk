@@ -164,12 +164,16 @@ class SubscriptionTest extends TestCase
         $this->assertStringContainsString('per_page=15', $uri);
     }
 
-    public function test_create_subscription_uses_the_given_idempotency_key(): void
+    /*
+     * The API takes no Idempotency-Key on an agreement create: every create is a new
+     * agreement, and the payer still has to authorize it on Boost's card page.
+     */
+    public function test_create_subscription_sends_no_idempotency_key(): void
     {
-        $bayarcash = $this->sdk([$this->json(['id' => 'rint_1'], 201)]);
+        $bayarcash = $this->sdk([$this->json(['id' => 'rsub_1', 'status' => 'pending'], 201)]);
 
-        $bayarcash->createSubscription(['portal_key' => 'pk', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1'], 'order-42');
+        $bayarcash->createSubscription(['portal_key' => 'pk', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1']);
 
-        $this->assertSame('order-42', $this->lastRequest()->getHeaderLine('Idempotency-Key'));
+        $this->assertFalse($this->lastRequest()->hasHeader('Idempotency-Key'));
     }
 }

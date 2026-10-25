@@ -56,6 +56,19 @@ class InstallmentTest extends TestCase
         ]);
     }
 
+    /* See SubscriptionTest::test_create_subscription_sends_no_idempotency_key(). */
+    public function test_create_installment_sends_no_idempotency_key(): void
+    {
+        $bayarcash = $this->sdk([$this->json(['id' => 'rins_1', 'status' => 'pending'], 201)]);
+
+        $bayarcash->createInstallment([
+            'portal_key' => 'pk', 'customer_id' => 'rcus_1', 'total_amount' => 600, 'installment_count' => 6,
+            'interval' => 'month', 'description' => 'Laptop', 'start_date' => '2027-01-01T10:00:00+08:00',
+        ]);
+
+        $this->assertFalse($this->lastRequest()->hasHeader('Idempotency-Key'));
+    }
+
     public function test_get_installments_paginated(): void
     {
         $bayarcash = $this->sdk([$this->json(['data' => [['id' => 'rins_1']], 'meta' => ['total' => 1]])]);

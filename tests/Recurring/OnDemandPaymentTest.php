@@ -33,6 +33,33 @@ class OnDemandPaymentTest extends TestCase
         $this->assertSame('pk_test_portal', $this->lastBody()['portal_key']);
     }
 
+    /*
+     * Every field the API's TransactionResource can answer is declared: an undeclared
+     * one becomes a dynamic property, deprecated since PHP 8.2.
+     */
+    public function test_the_charge_declares_every_field_the_api_answers(): void
+    {
+        $bayarcash = $this->sdk([
+            $this->json(CustomerTest::chargeRow([
+                'transaction_type' => 'Deduction', 'application_reason' => 'Monthly', 'payment_intent_id' => 'pi_1',
+            ]), 201),
+        ]);
+
+        $charge = $bayarcash->createOnDemandPayment([
+            'portal_key' => 'pk_test_portal', 'customer_id' => 'rcus_1', 'amount' => 49.9, 'description' => 'Top up',
+        ]);
+
+        $declared = array_keys(get_class_vars(TransactionResource::class));
+        foreach (['platformFees', 'nettAmount', 'transactionType', 'applicationReason', 'paymentIntentId'] as $field) {
+            $this->assertContains($field, $declared, $field . ' is not declared');
+        }
+        $this->assertSame(0.5, $charge->platformFees);
+        $this->assertSame(49.4, $charge->nettAmount);
+        $this->assertSame('Deduction', $charge->transactionType);
+        $this->assertSame('Monthly', $charge->applicationReason);
+        $this->assertSame('pi_1', $charge->paymentIntentId);
+    }
+
     public function test_create_on_demand_payment_requires_a_portal_key(): void
     {
         $bayarcash = $this->sdk([$this->json(['id' => 'trx_3'], 201)]);

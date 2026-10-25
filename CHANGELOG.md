@@ -11,7 +11,9 @@ All notable changes to will be documented in this file.
 - `verifyRecurringReturnUrlData()` for the signed landing on the recurring `return_url` (twelve fields + datetime + checksum).
 - `SubscriptionResource` / `InstallmentResource`: `redirectUrl` (the provider's card page, on the create answer only)
   and `card['country']`. `BoostRecurring::STATUS_EXPIRED` (nobody completed the card page), terminal and labelled.
-- `TransactionResource`: `recurringCustomerId`, `subscription`, `installment`. `SubscriptionResource`: `plan`.
+- `TransactionResource`: `recurringCustomerId`, `subscription`, `installment`, and the fields the API already
+  answered undeclared (a dynamic property, deprecated on PHP 8.2+): `platformFees`, `nettAmount`, `transactionType`,
+  `applicationReason`, `paymentIntentId`. `SubscriptionResource`: `plan`.
 - `saveCard()` takes an optional Idempotency-Key.
 - `BoostRecurring::STATUS_FAILED` and `STATUS_COMPLETED` (installments only); both count in `isTerminalStatus()`
   and have a `getStatusText()` label.
@@ -25,8 +27,11 @@ All notable changes to will be documented in this file.
   also saves the card: `$data` is the `createPaymentIntent()` body less the payer plus `tokenize` (`capture`, minimum
   2.00, or `validate_only`, minimum 1.00). The payer's name, email and phone come off the customer record. It returns a `PaymentIntentResource` — redirect to `->url` — instead of
   `['payment_url' => ...]`. `PaymentIntentResource` gains `tokenize`; a `validate_only` intent reads `authorized`.
-- `createCustomer`, `createPlan`, `createSubscription`, `createInstallment` and `saveCard` now always send an
-  `Idempotency-Key`, generating a UUID v4 when none is passed (the API requires it on the minting POSTs).
+- `createCustomer`, `createPlan`, `createOnDemandPayment` and `saveCard` now always send an `Idempotency-Key`,
+  generating a UUID v4 when none is passed (the API requires it on the customer, plan and on-demand POSTs).
+- **Breaking:** `createSubscription(array $data)` / `createInstallment(array $data)` take no Idempotency-Key and
+  send none: every create is a new agreement, billed only once the payer authorizes it on the card page. A key
+  passed as a second argument is ignored.
 - `BoostRecurring::INTERVAL_*` are now `day`/`week`/`month`/`year` (the API rejects ISO durations).
 - **Breaking:** `getPayment()` returns a `TransactionResource`; `getSubscriptionPayments()` / `getInstallmentPayments()`
   return a paginated `['data' => TransactionResource[], 'meta', 'links']` and take `$page` / `$perPage`.

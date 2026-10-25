@@ -25,11 +25,13 @@ use Webimpian\BayarcashSdk\Resources\TransactionResource;
  * channel enabled. Customers and Plans are portal-agnostic records, so they do
  * not take it, and neither do GET and PATCH calls.
  *
- * Every POST that mints something (customer, plan, subscription, installment,
- * on-demand payment) REQUIRES an `Idempotency-Key` header — the API answers 422
- * without one. The SDK generates a UUID v4 when the caller passes none; pass
- * your own (e.g. derived from your order id) to make a retry return the
- * original response instead of minting a second record, agreement or charge.
+ * The POSTs that mint a customer, a plan or an on-demand payment REQUIRE an
+ * `Idempotency-Key` header — the API answers 422 without one. The SDK generates
+ * a UUID v4 when the caller passes none; pass your own (e.g. derived from your
+ * order id) to make a retry return the original response instead of minting a
+ * second record or charging twice. Creating a subscription or an installment
+ * takes no key: every create is a new agreement, and it only bills once the
+ * payer has authorized it on the provider's card page.
  *
  * The only webhook is the recurring charge callback (every charge, every status
  * change; see CallbackVerifications::verifyRecurringChargeCallbackData()). An
@@ -167,17 +169,15 @@ trait RecurringPayments
      *                       (e.g. "2026-07-01T09:00:00+08:00") at least an hour
      *                       in the future; a bare date is rejected.
      * @return SubscriptionResource  `pending`, with `redirectUrl` (the provider's
-     *                               card page) — redirect the buyer there.
+     *                               card page) — redirect the buyer there. Every
+     *                               call is a new agreement (no Idempotency-Key).
      */
-    public function createSubscription(array $data, ?string $idempotencyKey = null)
+    public function createSubscription(array $data)
     {
         $this->ensureV3('createSubscription');
         $this->requirePortalKey($data);
 
-        return new SubscriptionResource(
-            $this->post('subscriptions', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
-            $this
-        );
+        return new SubscriptionResource($this->post('subscriptions', ['json' => $data]), $this);
     }
 
     public function getSubscriptions(array $filters = [])
@@ -242,17 +242,15 @@ trait RecurringPayments
      *                       (e.g. "2026-07-01T09:00:00+08:00") at least an hour
      *                       in the future; a bare date is rejected.
      * @return InstallmentResource  `pending`, with `redirectUrl` (the provider's
-     *                              card page) — redirect the buyer there.
+     *                              card page) — redirect the buyer there. Every
+     *                              call is a new agreement (no Idempotency-Key).
      */
-    public function createInstallment(array $data, ?string $idempotencyKey = null)
+    public function createInstallment(array $data)
     {
         $this->ensureV3('createInstallment');
         $this->requirePortalKey($data);
 
-        return new InstallmentResource(
-            $this->post('installments', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
-            $this
-        );
+        return new InstallmentResource($this->post('installments', ['json' => $data]), $this);
     }
 
     public function getInstallments(array $filters = [])

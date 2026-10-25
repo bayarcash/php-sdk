@@ -197,9 +197,11 @@ header("Location: " . $response->url); // redirect payer to Bayarcash Fpx Direct
 > Ids: customers `rcus_`, plans `rpln_`, subscriptions `rsub_`, installments `rins_`,
 > charges `trx_`.
 >
-> Every POST that creates something sends an `Idempotency-Key` (the API requires it). The SDK
-> generates a UUID v4 when you pass none; pass your own (e.g. from your order id) so a retry
-> returns the original response instead of creating a second record, agreement or charge.
+> Creating a customer, a plan, a saved card or an on-demand charge sends an `Idempotency-Key` (the
+> API requires it on the customer, plan and charge POSTs). The SDK generates a UUID v4 when you pass
+> none; pass your own (e.g. from your order id) so a retry returns the original response instead of
+> creating a second record or charging twice. Creating a subscription or an installment takes no key:
+> every create is a new agreement, and it only bills once the payer authorizes it on the card page.
 
 ```php
 use Webimpian\BayarcashSdk\BoostRecurring;
@@ -243,7 +245,7 @@ $subscription = $bayarcash->createSubscription([
     'start_date'  => '2026-11-01T09:00:00+08:00', // ISO-8601 timestamp, an hour or more ahead
     'callback_url'=> 'https://merchant/webhook',
     'return_url'  => 'https://merchant/return',
-], 'order-1042'); // optional Idempotency-Key
+]);
 header('Location: ' . $subscription->redirectUrl); // the provider's card page, lives 20 minutes
 
 $subscription = $bayarcash->getSubscription('rsub_xxx'); // ->plan holds the plan it bills on
@@ -278,12 +280,15 @@ $charge->status == Fpx::STATUS_SUCCESS; // 3 charged, 2 declined, 1 still settli
 // exchange_reference_number, exchange_transaction_id, currency, amount, transaction_status,
 // transaction_status_description + datetime + checksum). Verify before trusting status.
 if (! $bayarcash->verifyRecurringReturnUrlData($_GET, $apiSecretKey)) {
-    // someone typed a URL
+    http_response_code(400); // someone typed a URL: act on nothing in it
+    exit;
 }
 // status is the agreement's: pending|active|failed|expired|canceled... The transaction_* fields
 // are the first charge, '' until it is booked (its callback lands seconds before or after you).
-// The rule: verify, then read the agreement by id, then act:
-$subscription = $bayarcash->getSubscription($_GET['subscription_id']);
+// The rule: verify, then read the agreement by id, then act. recurring_type says which one it is:
+$agreement = $_GET['recurring_type'] === 'installment'
+    ? $bayarcash->getInstallment($_GET['installment_id'])
+    : $bayarcash->getSubscription($_GET['subscription_id']);
 // A buyer who closes the card page never lands here: the first-charge callback still tells you
 // when they enrolled, and the agreement reads `expired` 30 minutes after a create nobody finished.
 
