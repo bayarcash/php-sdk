@@ -3,7 +3,7 @@
     "description": "Bayarcash payment gateway PHP Sdk.",
     "type": "sdk",
     "require": {
-        "guzzlehttp/guzzle": "^7.0",
+        "guzzlehttp/guzzle": "^7.0|^8.0",
         "php": "^7.4|^8.0",
         "ext-json": "*"
     },

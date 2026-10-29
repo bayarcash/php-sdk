@@ -78,7 +78,8 @@ trait MakesHttpRequests
      */
     protected function request($verb, $uri, array $payload = [], array $headers = [])
     {
-        $options = [];
+        // Per request so setTimeout() also applies to a client passed to setToken()/useSandbox().
+        $options = ['timeout' => (float) $this->timeout];
 
         if (isset($payload['json'])) {
             $options['json'] = $payload['json'];

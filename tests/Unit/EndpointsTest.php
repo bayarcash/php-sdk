@@ -170,6 +170,42 @@ class EndpointsTest extends TestCase
         $this->assertSame('key1', $portal->portalKey);
     }
 
+    public function test_get_portals_follows_every_page(): void
+    {
+        $page = function (array $keys, int $current) {
+            return new Response(200, [], json_encode([
+                'data' => array_map(function ($key) { return ['portal_key' => $key]; }, $keys),
+                'meta' => ['current_page' => $current, 'last_page' => 3],
+            ]));
+        };
+        $sdk = $this->sdk([$page(['k1', 'k2'], 1), $page(['k3'], 2), $page(['k4'], 3)]);
+
+        $portals = $sdk->getPortals();
+
+        $this->assertSame(['k1', 'k2', 'k3', 'k4'], array_map(function ($p) { return $p->portalKey; }, $portals));
+        $this->assertSame(['', 'page=2', 'page=3'], array_map(function ($h) { return $h['request']->getUri()->getQuery(); }, $this->history));
+    }
+
+    public function test_get_channels_filters_by_portal_key_on_v3(): void
+    {
+        $sdk = $this->sdk([new Response(200, [], json_encode([
+            'data' => [['portal_key' => 'key 16', 'payment_channels' => [['id' => 1]]]],
+            'meta' => ['total' => 1],
+        ]))]);
+
+        $this->assertSame([['id' => 1]], $sdk->getChannels('key 16'));
+        $this->assertCount(1, $this->history);
+        $this->assertSame('/v3/portals', $this->lastRequest()->getUri()->getPath());
+        $this->assertSame('portal_key=key+16', $this->lastRequest()->getUri()->getQuery());
+    }
+
+    public function test_get_channels_returns_empty_when_portal_key_is_unknown(): void
+    {
+        $sdk = $this->sdk([new Response(200, [], json_encode(['data' => [], 'meta' => ['total' => 0]]))]);
+
+        $this->assertSame([], $sdk->getChannels('missing'));
+    }
+
     public function test_get_all_fpx_direct_debits_returns_data_and_meta(): void
     {
         $sdk = $this->sdk([new Response(200, [], json_encode([

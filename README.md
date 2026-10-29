@@ -35,7 +35,7 @@ The [Bayarcash](https://bayarcash.com/) SDK provides an expressive interface for
 
 - PHP 7.4 – 8.5
 - `ext-json`
-- Guzzle 7 (installed automatically)
+- Guzzle 7 or 8 (installed automatically)
 
 ## Installation
 

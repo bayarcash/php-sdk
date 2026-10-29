@@ -58,7 +58,7 @@ class Bayarcash
     public $guzzle;
 
     /**
-     * Number of seconds a request is retried.
+     * Request timeout in seconds.
      *
      * @var int
      */
@@ -100,6 +100,7 @@ class Bayarcash
         $this->guzzle = new HttpClient([
             'base_uri' => $this->getBaseUri(),
             'http_errors' => false,
+            'connect_timeout' => 10,
             'headers' => [
                 'Authorization' => 'Bearer ' . $this->token,
                 'Accept' => 'application/json',
@@ -269,11 +270,13 @@ class Bayarcash
     public function getPortals()
     {
         $response = $this->get('portals');
+        $portals = $response['data'] ?? $response;
 
-        return $this->transformCollection(
-            $response['data'] ?? $response,
-            PortalResource::class
-        );
+        for ($page = 2; $page <= ($response['meta']['last_page'] ?? 1); $page++) {
+            $portals = array_merge($portals, $this->get('portals?page=' . $page)['data'] ?? []);
+        }
+
+        return $this->transformCollection($portals, PortalResource::class);
     }
 
     /**
@@ -284,7 +287,12 @@ class Bayarcash
      */
     public function getChannels(string $portalKey): array
     {
-        $portals = $this->getPortals();
+        if ($this->apiVersion === 'v3') {
+            $response = $this->get('portals?' . http_build_query(['portal_key' => $portalKey]));
+            $portals = $this->transformCollection($response['data'] ?? [], PortalResource::class);
+        } else {
+            $portals = $this->getPortals();
+        }
 
         foreach ($portals as $portal) {
             if ($portal->portalKey === $portalKey) {

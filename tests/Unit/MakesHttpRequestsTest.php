@@ -5,6 +5,7 @@ namespace Bayarcash\Tests\Unit;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use Bayarcash\Bayarcash;
@@ -128,5 +129,27 @@ class MakesHttpRequestsTest extends TestCase
 
         $this->expectException(\Exception::class);
         $sdk->getAllTransactions();
+    }
+
+    public function test_requests_use_the_configured_timeout(): void
+    {
+        $history = [];
+        $stack = HandlerStack::create(new MockHandler([
+            new Response(200, [], '{}'),
+            new Response(200, [], '{}'),
+        ]));
+        $stack->push(Middleware::history($history));
+        $sdk = (new Bayarcash('test-token'))->setToken('test-token', new Client(['handler' => $stack]));
+
+        $sdk->get('anything');
+        $sdk->setTimeout('45')->get('anything');
+
+        $this->assertSame(30.0, $history[0]['options']['timeout']);
+        $this->assertSame(45.0, $history[1]['options']['timeout']);
+    }
+
+    public function test_default_client_sets_a_connect_timeout(): void
+    {
+        $this->assertSame(10, (new Bayarcash('test-token'))->guzzle->getConfig('connect_timeout'));
     }
 }

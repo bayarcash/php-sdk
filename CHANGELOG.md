@@ -2,6 +2,16 @@
 
 All notable changes to `bayarcash/php-sdk` will be documented in this file.
 
+## 3.2.0 - 2026-10-29
+
+### Added
+- Support for Guzzle 8. The SDK now works with Guzzle 7 and 8.
+
+### Fixed
+- `setTimeout()` is now applied to every request (default 30 seconds), including through a client passed to `setToken()` or `useSandbox()`, and the default client fails a connection after 10 seconds. Previously requests had no timeout.
+- `getPortals()` returns portals from every page, not just the first 15 (v3).
+- `getChannels()` finds any portal on v3, using the API's `portal_key` filter in a single request.
+
 ## 3.1.0 - 2026-08-20
 
 New v3 endpoints, DuitNow QR support, and payment-intent enhancements.
