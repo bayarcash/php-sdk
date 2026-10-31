@@ -16,6 +16,7 @@ class Dobw
     const STATUS_FAILED = 2;
     const STATUS_SUCCESS = 3;
     const STATUS_CANCELLED = 4;
+    const STATUS_ABANDONED = 5;
 
     protected static function getStatusLabels()
     {
@@ -25,6 +26,7 @@ class Dobw
             self::STATUS_CANCELLED => 'Cancelled',
             self::STATUS_SUCCESS => 'Successful',
             self::STATUS_FAILED => 'Failed',
+            self::STATUS_ABANDONED => 'Abandoned',
         ];
     }
 

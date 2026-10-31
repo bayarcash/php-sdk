@@ -2,6 +2,11 @@
 
 All notable changes to `bayarcash/php-sdk` will be documented in this file.
 
+## 3.2.1 - 2026-11-01
+
+### Added
+- `Fpx::STATUS_ABANDONED` and `Dobw::STATUS_ABANDONED` (5), and `FpxDirectDebit::STATUS_EXPIRED` (9) and `FpxDirectDebit::STATUS_INACTIVE` (10). The gateway sends these codes, and `getStatusText()` returned `UNKNOWN STATUS` for them.
+
 ## 3.2.0 - 2026-10-29
 
 ### Added

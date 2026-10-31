@@ -276,6 +276,7 @@ Fpx::STATUS_PENDING;    // 1
 Fpx::STATUS_FAILED;     // 2
 Fpx::STATUS_SUCCESS;    // 3
 Fpx::STATUS_CANCELLED;  // 4
+Fpx::STATUS_ABANDONED;  // 5
 
 if ((int) $callbackData['status'] === Fpx::STATUS_SUCCESS) {
     // Payment successful
@@ -374,6 +375,21 @@ FpxDirectDebit::MODE_DAILY;   // 'DL'
 FpxDirectDebit::MODE_WEEKLY;  // 'WK'
 FpxDirectDebit::MODE_MONTHLY; // 'MT'
 FpxDirectDebit::MODE_YEARLY;  // 'YR'
+
+// Mandate and application status
+FpxDirectDebit::STATUS_NEW;                     // 0
+FpxDirectDebit::STATUS_WAITING_APPROVAL;        // 1
+FpxDirectDebit::STATUS_FAILED_BANK_VERIFICATION; // 2
+FpxDirectDebit::STATUS_ACTIVE;                  // 3
+FpxDirectDebit::STATUS_TERMINATED;              // 4
+FpxDirectDebit::STATUS_APPROVED;                // 5
+FpxDirectDebit::STATUS_REJECTED;                // 6
+FpxDirectDebit::STATUS_CANCELLED;               // 7
+FpxDirectDebit::STATUS_ERROR;                   // 8
+FpxDirectDebit::STATUS_EXPIRED;                 // 9
+FpxDirectDebit::STATUS_INACTIVE;                // 10
+
+FpxDirectDebit::getStatusText(9); // "Expired"
 ```
 
 ### 1. Enrolment

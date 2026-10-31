@@ -40,6 +40,8 @@ class FpxDirectDebit
     const STATUS_REJECTED = 6;
     const STATUS_CANCELLED = 7;
     const STATUS_ERROR = 8;
+    const STATUS_EXPIRED = 9;
+    const STATUS_INACTIVE = 10;
 
     protected static function getStatusLabels()
     {
@@ -53,6 +55,8 @@ class FpxDirectDebit
             self::STATUS_ERROR => 'Error',
             self::STATUS_ACTIVE => 'Active',
             self::STATUS_TERMINATED => 'Terminated',
+            self::STATUS_EXPIRED => 'Expired',
+            self::STATUS_INACTIVE => 'Inactive',
         ];
     }
 
