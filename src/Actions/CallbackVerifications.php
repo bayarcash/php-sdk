@@ -73,6 +73,10 @@ trait CallbackVerifications
             'cycle' => $callbackData['cycle'] ?? null,
         ];
 
+        if (array_key_exists('payment_gateway_id', $callbackData)) {
+            $payload['payment_gateway_id'] = $callbackData['payment_gateway_id'];
+        }
+
         ksort($payload);
         $payload = implode('|', $payload);
 

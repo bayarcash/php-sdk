@@ -143,4 +143,52 @@ class CallbackVerificationsTest extends TestCase
             'order_number' => 'ORD1',
         ], $this->secret));
     }
+
+    public function test_direct_debit_deduction_callback_as_the_console_sends_it(): void
+    {
+        // Shape and types of a real sandbox deduction callback (JSON body, so status, gateway id and cycle are ints).
+        $fields = [
+            'record_type' => 'transaction',
+            'batch_number' => 'HLB1793536384',
+            'mandate_id' => 'md_6qa7kG',
+            'mandate_reference_number' => '361',
+            'transaction_id' => 'trx_z8kZ4G',
+            'datetime' => '2026-11-02 00:00:00',
+            'reference_number' => '1-793-536-256-309181',
+            'amount' => '100.00',
+            'status' => 3,
+            'status_description' => 'Successful',
+            'payment_gateway_id' => 3,
+            'cycle' => 1,
+        ];
+        $callback = $fields + ['checksum' => $this->sign($fields)];
+
+        $this->assertTrue($this->sdk->verifyDirectDebitTransactionCallbackData($callback, $this->secret));
+
+        $callback['payment_gateway_id'] = 1;
+        $this->assertFalse($this->sdk->verifyDirectDebitTransactionCallbackData($callback, $this->secret));
+    }
+
+    public function test_direct_debit_deduction_callback_without_payment_gateway_id_still_verifies(): void
+    {
+        $fields = [
+            'record_type' => 'transaction',
+            'batch_number' => 'HLB1',
+            'mandate_id' => 'md_1',
+            'mandate_reference_number' => 'ORD1',
+            'transaction_id' => 'trx_1',
+            'datetime' => '2025-09-01 00:00:00',
+            'reference_number' => 'REF1',
+            'amount' => '10.00',
+            'status' => '3',
+            'status_description' => 'Successful',
+            'cycle' => '1',
+        ];
+        $callback = $fields + ['checksum' => $this->sign($fields)];
+
+        $this->assertTrue($this->sdk->verifyDirectDebitTransactionCallbackData($callback, $this->secret));
+
+        $callback['amount'] = '1.00';
+        $this->assertFalse($this->sdk->verifyDirectDebitTransactionCallbackData($callback, $this->secret));
+    }
 }
