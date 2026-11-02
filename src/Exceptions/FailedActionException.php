@@ -20,7 +20,7 @@ class FailedActionException extends \Exception
     /**
      * @param  mixed  $response  Decoded array, stdClass, JSON string or plain string.
      */
-    public function __construct($response = null, int $code = 0, \Throwable $previous = null)
+    public function __construct($response = null, int $code = 0, ?\Throwable $previous = null)
     {
         $this->errors = $this->normalize($response);
 
