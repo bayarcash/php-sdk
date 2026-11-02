@@ -1,10 +1,10 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Tests\Recurring;
+namespace Bayarcash\Tests\Recurring;
 
-use Webimpian\BayarcashSdk\Fpx;
-use Webimpian\BayarcashSdk\Resources\TransactionResource;
-use Webimpian\BayarcashSdk\Tests\TestCase;
+use Bayarcash\Fpx;
+use Bayarcash\Resources\TransactionResource;
+use Bayarcash\Tests\TestCase;
 
 class OnDemandPaymentTest extends TestCase
 {

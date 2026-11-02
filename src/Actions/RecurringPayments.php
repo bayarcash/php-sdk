@@ -1,13 +1,13 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Actions;
+namespace Bayarcash\Actions;
 
-use Webimpian\BayarcashSdk\Resources\CustomerResource;
-use Webimpian\BayarcashSdk\Resources\InstallmentResource;
-use Webimpian\BayarcashSdk\Resources\PaymentIntentResource;
-use Webimpian\BayarcashSdk\Resources\PlanResource;
-use Webimpian\BayarcashSdk\Resources\SubscriptionResource;
-use Webimpian\BayarcashSdk\Resources\TransactionResource;
+use Bayarcash\Resources\CustomerResource;
+use Bayarcash\Resources\InstallmentResource;
+use Bayarcash\Resources\PaymentIntentResource;
+use Bayarcash\Resources\PlanResource;
+use Bayarcash\Resources\SubscriptionResource;
+use Bayarcash\Resources\TransactionResource;
 
 /**
  * Boost recurring-payment endpoints (v3 only).

@@ -1,12 +1,12 @@
 <?php
 
-namespace Webimpian\BayarcashSdk;
+namespace Bayarcash;
 
-use Webimpian\BayarcashSdk\Exceptions\FailedActionException;
-use Webimpian\BayarcashSdk\Exceptions\NotFoundException;
-use Webimpian\BayarcashSdk\Exceptions\RateLimitExceededException;
-use Webimpian\BayarcashSdk\Exceptions\TimeoutException;
-use Webimpian\BayarcashSdk\Exceptions\ValidationException;
+use Bayarcash\Exceptions\FailedActionException;
+use Bayarcash\Exceptions\NotFoundException;
+use Bayarcash\Exceptions\RateLimitExceededException;
+use Bayarcash\Exceptions\TimeoutException;
+use Bayarcash\Exceptions\ValidationException;
 use Psr\Http\Message\ResponseInterface;
 
 trait MakesHttpRequests
@@ -72,11 +72,13 @@ trait MakesHttpRequests
      * @param $verb
      * @param $uri
      * @param array $payload
+     * @param array $headers
      * @return mixed|string
      */
     protected function request($verb, $uri, array $payload = [], array $headers = [])
     {
-        $options = [];
+        // Per request so setTimeout() also applies to a client passed to setToken()/useSandbox().
+        $options = ['timeout' => (float) $this->timeout];
 
         if (isset($payload['json'])) {
             $options['json'] = $payload['json'];

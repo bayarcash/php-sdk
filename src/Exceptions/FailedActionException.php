@@ -1,6 +1,6 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Exceptions;
+namespace Bayarcash\Exceptions;
 
 /**
  * Raised for a non-retryable 4xx "the action failed" response (e.g. HTTP 400

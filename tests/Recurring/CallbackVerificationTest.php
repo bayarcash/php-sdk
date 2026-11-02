@@ -1,9 +1,9 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Tests\Recurring;
+namespace Bayarcash\Tests\Recurring;
 
 use PHPUnit\Framework\TestCase;
-use Webimpian\BayarcashSdk\Bayarcash;
+use Bayarcash\Bayarcash;
 
 class CallbackVerificationTest extends TestCase
 {

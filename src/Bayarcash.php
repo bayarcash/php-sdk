@@ -1,12 +1,13 @@
 <?php
 
-namespace Webimpian\BayarcashSdk;
+namespace Bayarcash;
 
 use GuzzleHttp\Client as HttpClient;
-use Webimpian\BayarcashSdk\Resources\FpxBankResource;
-use Webimpian\BayarcashSdk\Resources\PortalResource;
-use Webimpian\BayarcashSdk\Resources\PaymentIntentResource;
-use Webimpian\BayarcashSdk\Resources\TransactionResource;
+use Bayarcash\Resources\FpxBankResource;
+use Bayarcash\Resources\PortalResource;
+use Bayarcash\Resources\PaymentIntentResource;
+use Bayarcash\Resources\TransactionResource;
+use Bayarcash\Resources\DuitNowQrResource;
 
 class Bayarcash
 {
@@ -39,7 +40,9 @@ class Bayarcash
     const BOOST_WALLET = 17;
     const GRABPAY = 18;
     const GRABPL = 19;
+    const SHOPBACK_BNPL = 20;
     const SHOPEE_PAY = 21;
+    const FPX_B2B = 23;
 
     /**
      * The Bayarcash API Key.
@@ -56,7 +59,7 @@ class Bayarcash
     public $guzzle;
 
     /**
-     * Number of seconds a request is retried.
+     * Request timeout in seconds.
      *
      * @var int
      */
@@ -98,6 +101,7 @@ class Bayarcash
         $this->guzzle = new HttpClient([
             'base_uri' => $this->getBaseUri(),
             'http_errors' => false,
+            'connect_timeout' => 10,
             'headers' => [
                 'Authorization' => 'Bearer ' . $this->token,
                 'Accept' => 'application/json',
@@ -192,7 +196,7 @@ class Bayarcash
     }
 
     /**
-     * Get the current API version.
+     * Get the API version currently in use.
      *
      * @return string
      */
@@ -220,6 +224,18 @@ class Bayarcash
     }
 
     /**
+     * Get the API server status.
+     *
+     * @return mixed
+     */
+    public function getServerStatus()
+    {
+        $this->assertV3('The getServerStatus method');
+
+        return $this->get('up');
+    }
+
+    /**
      * Get list of FPX banks.
      *
      * @return array
@@ -233,6 +249,21 @@ class Bayarcash
     }
 
     /**
+     * Get list of DuitNow DOBW banks.
+     *
+     * @return array
+     */
+    public function duitNowDobwBanksList()
+    {
+        $this->assertV3('The duitNowDobwBanksList method');
+
+        return $this->transformCollection(
+            $this->get('duitnow/dobw/banks'),
+            FpxBankResource::class
+        );
+    }
+
+    /**
      * Get list of portals.
      *
      * @return array
@@ -240,11 +271,13 @@ class Bayarcash
     public function getPortals()
     {
         $response = $this->get('portals');
+        $portals = $response['data'] ?? $response;
 
-        return $this->transformCollection(
-            $response['data'] ?? $response,
-            PortalResource::class
-        );
+        for ($page = 2; $page <= ($response['meta']['last_page'] ?? 1); $page++) {
+            $portals = array_merge($portals, $this->get('portals?page=' . $page)['data'] ?? []);
+        }
+
+        return $this->transformCollection($portals, PortalResource::class);
     }
 
     /**
@@ -255,7 +288,12 @@ class Bayarcash
      */
     public function getChannels(string $portalKey): array
     {
-        $portals = $this->getPortals();
+        if ($this->apiVersion === 'v3') {
+            $response = $this->get('portals?' . http_build_query(['portal_key' => $portalKey]));
+            $portals = $this->transformCollection($response['data'] ?? [], PortalResource::class);
+        } else {
+            $portals = $this->getPortals();
+        }
 
         foreach ($portals as $portal) {
             if ($portal->portalKey === $portalKey) {
@@ -267,24 +305,76 @@ class Bayarcash
     }
 
     /**
+     * Get a single portal by ID.
+     *
+     * @param  string  $portalId
+     * @return \Bayarcash\Resources\PortalResource
+     */
+    public function getPortal(string $portalId)
+    {
+        $this->assertV3('The getPortal method');
+
+        return new PortalResource(
+            $this->get('portals/' . $portalId),
+            $this
+        );
+    }
+
+    /**
      * Create a new payment intent.
      *
      * @param  array  $data
-     * @return \Webimpian\BayarcashSdk\Resources\PaymentIntentResource
+     * @param  string|null  $idempotencyKey  Optional v3 Idempotency-Key (max 255 chars).
+     * @return \Bayarcash\Resources\PaymentIntentResource
      */
-    public function createPaymentIntent(array $data)
+    public function createPaymentIntent(array $data, ?string $idempotencyKey = null)
     {
+        if ($idempotencyKey !== null) {
+            $this->assertV3('The Idempotency-Key header');
+        }
+
         return new PaymentIntentResource(
-            $this->post('payment-intents', $data),
+            $this->post('payment-intents', $data, $this->idempotencyHeader($idempotencyKey)),
             $this
         );
+    }
+
+    /**
+     * Create a payment intent and generate its DuitNow QR in one request.
+     *
+     * Requires a single DuitNow QR channel; the QR is returned on the `duitnowQr` property.
+     *
+     * @return \Bayarcash\Resources\PaymentIntentResource
+     */
+    public function createDuitNowQrPaymentIntent(array $data, ?string $idempotencyKey = null)
+    {
+        $this->assertV3('The createDuitNowQrPaymentIntent method');
+
+        $data['generate_qr'] = true;
+
+        return new PaymentIntentResource(
+            $this->post('payment-intents', $data, $this->idempotencyHeader($idempotencyKey)),
+            $this
+        );
+    }
+
+    protected function assertV3(string $feature): void
+    {
+        if ($this->apiVersion !== 'v3') {
+            throw new \Exception("{$feature} is only available for API version v3.");
+        }
+    }
+
+    private function idempotencyHeader(?string $key): array
+    {
+        return $key === null ? [] : ['Idempotency-Key' => $key];
     }
 
     /**
      * Get transaction details.
      *
      * @param  string  $id
-     * @return \Webimpian\BayarcashSdk\Resources\TransactionResource
+     * @return \Bayarcash\Resources\TransactionResource
      */
     public function getTransaction($id)
     {
@@ -298,7 +388,7 @@ class Bayarcash
      * Get payment intent by ID.
      *
      * @param  string  $paymentIntentId
-     * @return \Webimpian\BayarcashSdk\Resources\PaymentIntentResource
+     * @return \Bayarcash\Resources\PaymentIntentResource
      * @throws \Exception If the API version is not v3
      */
     public function getPaymentIntent(string $paymentIntentId)
@@ -318,13 +408,13 @@ class Bayarcash
 	 * Cancel payment intent.
 	 *
 	 * @param  string  $paymentIntentId
-	 * @return \Webimpian\BayarcashSdk\Resources\PaymentIntentResource
+	 * @return \Bayarcash\Resources\PaymentIntentResource
 	 * @throws \Exception If the API version is not v3
 	 */
 	public function cancelPaymentIntent(string $paymentIntentId)
 	{
 		if ($this->apiVersion !== 'v3') {
-			throw new \Exception('The getPaymentIntent method is only available for API version v3.');
+			throw new \Exception('The cancelPaymentIntent method is only available for API version v3.');
 		}
 
 		return new PaymentIntentResource(
@@ -332,6 +422,37 @@ class Bayarcash
 			$this
 		);
 	}
+
+    /**
+     * Regenerate the DuitNow QR for an existing DuitNow-QR payment intent.
+     *
+     * Re-serves the active QR while one is still valid; issues a fresh QR once it expires.
+     *
+     * @param  string  $paymentIntentId
+     * @return \Bayarcash\Resources\DuitNowQrResource
+     */
+    public function regenerateDuitNowQr(string $paymentIntentId)
+    {
+        $this->assertV3('The regenerateDuitNowQr method');
+
+        return new DuitNowQrResource(
+            $this->post('payment-intents/' . $paymentIntentId . '/duitnow-qr'),
+            $this
+        );
+    }
+
+    /**
+     * Poll the payment status of a DuitNow QR transaction.
+     *
+     * @param  string  $transactionId
+     * @return array
+     */
+    public function getDuitNowQrStatus(string $transactionId)
+    {
+        $this->assertV3('The getDuitNowQrStatus method');
+
+        return $this->get('transactions/' . $transactionId . '/duitnow-qr/status');
+    }
 
     /**
      * Get all transactions with optional filters.
@@ -469,7 +590,7 @@ class Bayarcash
      * Get transaction by exchange reference number.
      *
      * @param  string  $referenceNumber
-     * @return \Webimpian\BayarcashSdk\Resources\TransactionResource|null
+     * @return \Bayarcash\Resources\TransactionResource|null
      * @throws \Exception If the API version is not v3
      */
     public function getTransactionByReferenceNumber(string $referenceNumber)

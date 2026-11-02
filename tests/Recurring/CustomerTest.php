@@ -1,12 +1,12 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Tests\Recurring;
+namespace Bayarcash\Tests\Recurring;
 
-use Webimpian\BayarcashSdk\Fpx;
-use Webimpian\BayarcashSdk\Resources\CustomerResource;
-use Webimpian\BayarcashSdk\Resources\PaymentIntentResource;
-use Webimpian\BayarcashSdk\Resources\TransactionResource;
-use Webimpian\BayarcashSdk\Tests\TestCase;
+use Bayarcash\Fpx;
+use Bayarcash\Resources\CustomerResource;
+use Bayarcash\Resources\PaymentIntentResource;
+use Bayarcash\Resources\TransactionResource;
+use Bayarcash\Tests\TestCase;
 
 class CustomerTest extends TestCase
 {
@@ -280,7 +280,7 @@ class CustomerTest extends TestCase
 
     public function test_recurring_methods_require_v3(): void
     {
-        $bayarcash = (new \Webimpian\BayarcashSdk\Bayarcash('tok')); // defaults to v2
+        $bayarcash = (new \Bayarcash\Bayarcash('tok')); // defaults to v2
 
         $this->expectException(\Exception::class);
         $bayarcash->createCustomer([

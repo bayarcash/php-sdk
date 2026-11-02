@@ -1,10 +1,10 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Tests\Recurring;
+namespace Bayarcash\Tests\Recurring;
 
-use Webimpian\BayarcashSdk\Resources\TransactionResource;
-use Webimpian\BayarcashSdk\Resources\InstallmentResource;
-use Webimpian\BayarcashSdk\Tests\TestCase;
+use Bayarcash\Resources\TransactionResource;
+use Bayarcash\Resources\InstallmentResource;
+use Bayarcash\Tests\TestCase;
 
 class InstallmentTest extends TestCase
 {

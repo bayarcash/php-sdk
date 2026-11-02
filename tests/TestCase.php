@@ -1,6 +1,6 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Tests;
+namespace Bayarcash\Tests;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
@@ -9,7 +9,7 @@ use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase as BaseTestCase;
-use Webimpian\BayarcashSdk\Bayarcash;
+use Bayarcash\Bayarcash;
 
 class TestCase extends BaseTestCase
 {

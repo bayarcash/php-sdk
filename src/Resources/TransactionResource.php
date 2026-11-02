@@ -1,6 +1,6 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Resources;
+namespace Bayarcash\Resources;
 
 class TransactionResource extends Resource
 {
@@ -28,6 +28,8 @@ class TransactionResource extends Resource
     public ?string $portal = null;
     public ?array $merchant = null;
     public ?array $mandate = null;
+    public ?bool $payerIdentityVerified = null;
+    public ?array $fpxExtraInfo = null;
 
     /* FPX Direct Debit only: the deduction or the application it belongs to. */
     public ?string $transactionType = null;

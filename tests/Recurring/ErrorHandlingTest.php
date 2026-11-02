@@ -1,11 +1,11 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Tests\Recurring;
+namespace Bayarcash\Tests\Recurring;
 
-use Webimpian\BayarcashSdk\Exceptions\FailedActionException;
-use Webimpian\BayarcashSdk\Exceptions\NotFoundException;
-use Webimpian\BayarcashSdk\Exceptions\ValidationException;
-use Webimpian\BayarcashSdk\Tests\TestCase;
+use Bayarcash\Exceptions\FailedActionException;
+use Bayarcash\Exceptions\NotFoundException;
+use Bayarcash\Exceptions\ValidationException;
+use Bayarcash\Tests\TestCase;
 
 /**
  * Error-surfacing behaviour for the v3 recurring endpoints. A 4xx from the API

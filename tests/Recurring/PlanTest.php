@@ -1,9 +1,9 @@
 <?php
 
-namespace Webimpian\BayarcashSdk\Tests\Recurring;
+namespace Bayarcash\Tests\Recurring;
 
-use Webimpian\BayarcashSdk\Resources\PlanResource;
-use Webimpian\BayarcashSdk\Tests\TestCase;
+use Bayarcash\Resources\PlanResource;
+use Bayarcash\Tests\TestCase;
 
 class PlanTest extends TestCase
 {
