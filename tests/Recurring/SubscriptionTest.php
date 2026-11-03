@@ -176,4 +176,39 @@ class SubscriptionTest extends TestCase
 
         $this->assertFalse($this->lastRequest()->hasHeader('Idempotency-Key'));
     }
+
+    /*
+     * The merchant's `reference` goes in the body as given (the API validates it), and the
+     * agreement answers it back.
+     */
+    public function test_reference_is_sent_in_the_body(): void
+    {
+        $bayarcash = $this->sdk([
+            $this->json(['id' => 'rsub_1', 'reference' => 'SUB-0001', 'status' => 'pending'], 201),
+        ]);
+
+        $subscription = $bayarcash->createSubscription([
+            'portal_key' => 'pk', 'reference' => 'SUB-0001', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1',
+        ]);
+
+        $this->assertSame('SUB-0001', $this->lastBody()['reference']);
+        $this->assertContains('reference', array_keys(get_class_vars(SubscriptionResource::class)));
+        $this->assertSame('SUB-0001', $subscription->reference);
+    }
+
+    /*
+     * A repeat with the same reference and body answers the stored agreement: 200 once the
+     * create is settled, 202 while it is still pending. Both are answers, not errors.
+     */
+    public function test_a_repeat_answer_is_the_agreement_not_an_error(): void
+    {
+        $bayarcash = $this->sdk([
+            $this->json(['id' => 'rsub_1', 'reference' => 'SUB-0001', 'status' => 'pending'], 202),
+            $this->json(['id' => 'rsub_1', 'reference' => 'SUB-0001', 'status' => 'active'], 200),
+        ]);
+        $data = ['portal_key' => 'pk', 'reference' => 'SUB-0001', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1'];
+
+        $this->assertSame('pending', $bayarcash->createSubscription($data)->status);
+        $this->assertSame('active', $bayarcash->createSubscription($data)->status);
+    }
 }

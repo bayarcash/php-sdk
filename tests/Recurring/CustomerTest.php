@@ -55,28 +55,27 @@ class CustomerTest extends TestCase
             $this->json(['id' => 'rcus_1'], 201),
             $this->json(['id' => 'rpln_1'], 201),
             $this->json(self::saveCardIntent(), 201),
-            $this->json(self::chargeRow(), 201),
         ]);
 
-        // The API answers 422 without the header on the customer, plan and on-demand
-        // POSTs. Agreement creates take none (SubscriptionTest, InstallmentTest).
+        // The API answers 422 without the header on the customer and plan POSTs.
+        // Agreement and on-demand creates take none: the merchant's `reference`
+        // dedupes them (SubscriptionTest, InstallmentTest, OnDemandPaymentTest).
         $bayarcash->createCustomer(['full_name' => 'Jane', 'email' => 'j@e.com', 'phone' => '011']);
         $bayarcash->createPlan(['name' => 'Pro', 'price' => 10, 'interval' => 'month']);
         $bayarcash->saveCard('rcus_1', self::saveCardBody());
-        $bayarcash->createOnDemandPayment(['portal_key' => 'pk', 'customer_id' => 'rcus_1', 'amount' => 10]);
 
         $keys = array_map(function ($entry) {
             return $entry['request']->getHeaderLine('Idempotency-Key');
         }, $this->history);
 
-        $this->assertCount(4, $keys);
+        $this->assertCount(3, $keys);
         foreach ($keys as $key) {
             $this->assertMatchesRegularExpression(
                 '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',
                 $key
             );
         }
-        $this->assertCount(4, array_unique($keys));
+        $this->assertCount(3, array_unique($keys));
     }
 
     public function test_save_card_sends_the_given_idempotency_key(): void

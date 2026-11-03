@@ -36,8 +36,15 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   also saves the card: `$data` is the `createPaymentIntent()` body less the payer plus `tokenize` (`capture`, minimum
   2.00, or `validate_only`, minimum 1.00). The payer's name, email and phone come off the customer record. It returns a `PaymentIntentResource` — redirect to `->url` — instead of
   `['payment_url' => ...]`. `PaymentIntentResource` gains `tokenize`; a `validate_only` intent reads `authorized`.
-- `createCustomer`, `createPlan`, `createOnDemandPayment` and `saveCard` now always send an `Idempotency-Key`,
-  generating a UUID v4 when none is passed (the API requires it on the customer, plan and on-demand POSTs).
+- `createCustomer`, `createPlan` and `saveCard` now always send an `Idempotency-Key`, generating a UUID v4 when
+  none is passed (the API requires it on the customer and plan POSTs).
+- `createSubscription()`, `createInstallment()` and `createOnDemandPayment()` require a merchant `reference` in
+  `$data` (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type forever; the API validates it). A repeat with
+  the same reference and body answers the stored record (200, or 202 while it is still pending); a reference reused
+  with another body is a 422 `reference_already_used`. `SubscriptionResource` / `InstallmentResource` gain
+  `reference`; a charge answers it as `orderNumber`.
+- **Breaking:** `createOnDemandPayment(array $data)` no longer takes `$idempotencyKey` and sends no `Idempotency-Key`:
+  the `reference` dedupes the charge.
 - **Breaking:** `createSubscription(array $data)` / `createInstallment(array $data)` take no Idempotency-Key and
   send none: every create is a new agreement, billed only once the payer authorizes it on the card page. A key
   passed as a second argument is ignored.

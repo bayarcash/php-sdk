@@ -25,13 +25,19 @@ use Bayarcash\Resources\TransactionResource;
  * channel enabled. Customers and Plans are portal-agnostic records, so they do
  * not take it, and neither do GET and PATCH calls.
  *
- * The POSTs that mint a customer, a plan or an on-demand payment REQUIRE an
- * `Idempotency-Key` header — the API answers 422 without one. The SDK generates
- * a UUID v4 when the caller passes none; pass your own (e.g. derived from your
- * order id) to make a retry return the original response instead of minting a
- * second record or charging twice. Creating a subscription or an installment
- * takes no key: every create is a new agreement, and it only bills once the
- * payer has authorized it on the provider's card page.
+ * The three money requests also REQUIRE `reference`: the merchant's own id for
+ * the agreement or charge (up to 36 of A-Z a-z 0-9 _ -), unique per merchant
+ * per type forever. It is what makes a retry safe: a repeat with the same
+ * reference and body answers the stored record (200, or 202 while it is still
+ * pending — repeat later with the same reference), and a reference used with
+ * another body is a 422 `reference_already_used`. A new try needs a new
+ * reference. These three take no Idempotency-Key.
+ *
+ * The POSTs that mint a customer, a plan or a save-card intent (saveCard())
+ * REQUIRE an `Idempotency-Key` header — the API answers 422 without one. The
+ * SDK generates a UUID v4 when the caller passes none; pass your own (e.g.
+ * derived from your own id) to make a retry return the original response
+ * instead of minting a second record.
  *
  * The only webhook is the recurring charge callback (every charge, every status
  * change; see CallbackVerifications::verifyRecurringChargeCallbackData()). An
@@ -164,13 +170,18 @@ trait RecurringPayments
     // ---------------------------------------------------------------------
 
     /**
-     * @param  array  $data  Subscription payload. `portal_key` is required, and
-     *                       `start_date` must be a full ISO-8601 timestamp
-     *                       (e.g. "2026-07-01T09:00:00+08:00") at least an hour
-     *                       in the future; a bare date is rejected.
+     * @param  array  $data  Subscription payload. `portal_key` is required,
+     *                       `reference` (the merchant's own id for this agreement,
+     *                       up to 36 of A-Z a-z 0-9 _ -, unique per merchant
+     *                       forever) is required, and `start_date` must be a full
+     *                       ISO-8601 timestamp (e.g. "2026-07-01T09:00:00+08:00")
+     *                       at least an hour in the future; a bare date is rejected.
      * @return SubscriptionResource  `pending`, with `redirectUrl` (the provider's
-     *                               card page) — redirect the buyer there. Every
-     *                               call is a new agreement (no Idempotency-Key).
+     *                               card page) — redirect the buyer there. A repeat
+     *                               with the same reference and body answers the
+     *                               stored agreement (200, or 202 while still
+     *                               pending); a reference used with another body is
+     *                               a 422 `reference_already_used`. No Idempotency-Key.
      */
     public function createSubscription(array $data)
     {
@@ -235,6 +246,7 @@ trait RecurringPayments
 
     /**
      * @param  array  $data  Installment payload. `portal_key` is required,
+     *                       `reference` is required (as on createSubscription()),
      *                       `description` (what the customer is paying off, up to
      *                       500 characters) is required, `interval` is one of
      *                       day|week|month|year (BoostRecurring::INTERVAL_*), and
@@ -242,8 +254,9 @@ trait RecurringPayments
      *                       (e.g. "2026-07-01T09:00:00+08:00") at least an hour
      *                       in the future; a bare date is rejected.
      * @return InstallmentResource  `pending`, with `redirectUrl` (the provider's
-     *                              card page) — redirect the buyer there. Every
-     *                              call is a new agreement (no Idempotency-Key).
+     *                              card page) — redirect the buyer there. Repeats
+     *                              answer as on createSubscription(). No
+     *                              Idempotency-Key.
      */
     public function createInstallment(array $data)
     {
@@ -314,18 +327,21 @@ trait RecurringPayments
      * 422 `customer_no_saved_card` (ValidationException): save one with
      * saveCard() first. No `return_url`: there is no customer page.
      *
-     * @param  array  $data  Payment payload. `portal_key` is required.
+     * The merchant's `reference` dedupes the charge, so no Idempotency-Key is sent: a
+     * repeat with the same reference and body answers the stored charge (200, or 202
+     * while it is still pending), and a reference used with another body is a 422
+     * `reference_already_used`. The charge answers the reference as `order_number`.
+     *
+     * @param  array  $data  Payment payload. `portal_key` and `reference` (up to 36 of
+     *                       A-Z a-z 0-9 _ -, unique per merchant forever) are required.
      * @return TransactionResource
      */
-    public function createOnDemandPayment(array $data, ?string $idempotencyKey = null)
+    public function createOnDemandPayment(array $data)
     {
         $this->ensureV3('createOnDemandPayment');
         $this->requirePortalKey($data);
 
-        return new TransactionResource(
-            $this->post('payments', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
-            $this
-        );
+        return new TransactionResource($this->post('payments', ['json' => $data]), $this);
     }
 
     /**

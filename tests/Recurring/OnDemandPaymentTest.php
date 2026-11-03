@@ -8,7 +8,7 @@ use Bayarcash\Tests\TestCase;
 
 class OnDemandPaymentTest extends TestCase
 {
-    public function test_create_on_demand_payment_returns_the_charge_and_sends_idempotency_key(): void
+    public function test_create_on_demand_payment_returns_the_charge(): void
     {
         $bayarcash = $this->sdk([
             $this->json(CustomerTest::chargeRow(['id' => 'trx_3', 'exchange_transaction_id' => 'chg-3', 'amount' => 25.0]), 201),
@@ -19,7 +19,7 @@ class OnDemandPaymentTest extends TestCase
             'customer_id' => 'rcus_1',
             'amount' => 25.00,
             'description' => 'Top up',
-        ], 'idem-key-1');
+        ]);
 
         $this->assertInstanceOf(TransactionResource::class, $charge);
         $this->assertSame('trx_3', $charge->id);
@@ -28,7 +28,6 @@ class OnDemandPaymentTest extends TestCase
         $this->assertSame('rcus_1', $charge->recurringCustomerId);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('payments', (string) $this->lastRequest()->getUri());
-        $this->assertSame('idem-key-1', $this->lastRequest()->getHeaderLine('Idempotency-Key'));
         $this->assertSame('Top up', $this->lastBody()['description']);
         $this->assertSame('pk_test_portal', $this->lastBody()['portal_key']);
     }
@@ -70,22 +69,59 @@ class OnDemandPaymentTest extends TestCase
         $bayarcash->createOnDemandPayment(['customer_id' => 'rcus_1', 'amount' => 25.00]);
     }
 
-    public function test_create_on_demand_payment_auto_generates_idempotency_key_when_omitted(): void
+    /*
+     * The merchant's `reference` dedupes an on-demand charge (unique per merchant, forever),
+     * so the API takes no Idempotency-Key and the SDK sends none.
+     */
+    public function test_on_demand_sends_no_idempotency_key(): void
     {
-        $bayarcash = $this->sdk([$this->json(['id' => 'trx_3', 'status' => '3'], 201)]);
+        $bayarcash = $this->sdk([$this->json(CustomerTest::chargeRow(), 201)]);
 
         $bayarcash->createOnDemandPayment([
-            'portal_key' => 'pk_test_portal',
+            'portal_key' => 'pk_test_portal', 'reference' => 'TOPUP-0001',
             'customer_id' => 'rcus_1', 'amount' => 25.00, 'description' => 'Top up',
         ]);
 
-        // Required by the API — the SDK must always send a non-empty key (UUID v4).
-        $key = $this->lastRequest()->getHeaderLine('Idempotency-Key');
-        $this->assertNotEmpty($key);
-        $this->assertMatchesRegularExpression(
-            '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',
-            $key
-        );
+        $this->assertFalse($this->lastRequest()->hasHeader('Idempotency-Key'));
+    }
+
+    /*
+     * The reference goes in the body as given (the API validates it), and the charge
+     * answers it back as `order_number`, beside its BPGR exchange reference.
+     */
+    public function test_reference_is_sent_in_the_body(): void
+    {
+        $bayarcash = $this->sdk([
+            $this->json(CustomerTest::chargeRow(['order_number' => 'TOPUP-0001']), 201),
+        ]);
+
+        $charge = $bayarcash->createOnDemandPayment([
+            'portal_key' => 'pk_test_portal', 'reference' => 'TOPUP-0001',
+            'customer_id' => 'rcus_1', 'amount' => 25.00, 'description' => 'Top up',
+        ]);
+
+        $this->assertSame('TOPUP-0001', $this->lastBody()['reference']);
+        $this->assertSame('TOPUP-0001', $charge->orderNumber);
+        $this->assertSame('BPGR2026100600000042', $charge->exchangeReferenceNumber);
+    }
+
+    /*
+     * A repeat with the same reference and body answers the stored charge with 200, and
+     * one still settling answers 202: both are answers, not errors.
+     */
+    public function test_a_repeat_answer_is_the_charge_not_an_error(): void
+    {
+        $bayarcash = $this->sdk([
+            $this->json(CustomerTest::chargeRow(['order_number' => 'TOPUP-0001']), 200),
+            $this->json(CustomerTest::chargeRow(['order_number' => 'TOPUP-0001', 'status' => 1]), 202),
+        ]);
+        $data = [
+            'portal_key' => 'pk_test_portal', 'reference' => 'TOPUP-0001',
+            'customer_id' => 'rcus_1', 'amount' => 25.00, 'description' => 'Top up',
+        ];
+
+        $this->assertSame('TOPUP-0001', $bayarcash->createOnDemandPayment($data)->orderNumber);
+        $this->assertEquals(1, $bayarcash->createOnDemandPayment($data)->status);
     }
 
     public function test_get_payment_returns_a_transaction_record(): void

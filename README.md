@@ -593,11 +593,16 @@ $transaction->toArray();
 > Ids: customers `rcus_`, plans `rpln_`, subscriptions `rsub_`, installments `rins_`,
 > charges `trx_`.
 >
-> Creating a customer, a plan, a saved card or an on-demand charge sends an `Idempotency-Key` (the
-> API requires it on the customer, plan and charge POSTs). The SDK generates a UUID v4 when you pass
-> none; pass your own (e.g. from your order id) so a retry returns the original response instead of
-> creating a second record or charging twice. Creating a subscription or an installment takes no key:
-> every create is a new agreement, and it only bills once the payer authorizes it on the card page.
+> Creating a subscription, an installment or an on-demand charge requires your own `reference`
+> (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type, forever). It makes a retry safe: a
+> repeat with the same reference and body returns the stored record (`200`, or `202` while it is
+> still pending — repeat later with the same reference), and a reference reused with a different
+> body is a `422 reference_already_used`. A new try needs a new reference. These three send no
+> `Idempotency-Key`.
+>
+> Creating a customer, a plan or a saved card sends an `Idempotency-Key` (the API requires it on
+> those POSTs). The SDK generates a UUID v4 when you pass none; pass your own so a retry returns
+> the original response instead of creating a second record.
 
 ```php
 use Bayarcash\BoostRecurring;
@@ -636,6 +641,7 @@ $plan = $bayarcash->updatePlan('rpln_xxx', ['price' => 59.90]);
 // Subscriptions — created at the provider, pending; redirect the buyer to ->redirectUrl
 $subscription = $bayarcash->createSubscription([
     'portal_key'  => 'your-portal-key',   // required; the portal must have the card channel
+    'reference'   => 'SUB-0001',          // required; your own id, unique forever
     'customer_id' => 'rcus_xxx',          // or inline: 'customer' => ['full_name','email','phone']
     'plan_id'     => 'rpln_xxx',
     'start_date'  => '2026-11-01T09:00:00+08:00', // ISO-8601 timestamp, an hour or more ahead
@@ -652,6 +658,7 @@ $bayarcash->cancelSubscription('rsub_xxx');
 // Installments — the same: pending, with the card page
 $installment = $bayarcash->createInstallment([
     'portal_key'        => 'your-portal-key',
+    'reference'         => 'INS-0001',
     'customer_id'       => 'rcus_xxx',
     'total_amount'      => 1200.00,
     'interval'          => BoostRecurring::INTERVAL_MONTHLY,
@@ -664,10 +671,11 @@ header('Location: ' . $installment->redirectUrl);
 // On-demand charge on a saved card — synchronous, the answer is the charge (no return_url)
 $charge = $bayarcash->createOnDemandPayment([
     'portal_key'  => 'your-portal-key',
+    'reference'   => 'INV-1042',      // a retry after a timeout with the same reference returns the same charge
     'customer_id' => 'rcus_xxx',
     'amount'      => 25.00,
     'description' => 'Wallet top up', // letters, digits, spaces, full stops, hyphens
-], 'invoice-1042'); // Idempotency-Key: a retry after a timeout returns the same charge
+]); // ->orderNumber is your reference, ->exchangeReferenceNumber the BPGR- reference
 $charge->status == Fpx::STATUS_SUCCESS; // 3 charged, 2 declined, 1 still settling (callback follows)
 // A customer with no saved card throws ValidationException (422 customer_no_saved_card): saveCard() first.
 

@@ -7,6 +7,8 @@ class InstallmentResource extends Resource
     public ?string $type = null;
     public ?string $id = null;
     public ?string $portalKey = null;
+    /** The merchant's own id for this agreement, as sent on the create. */
+    public ?string $reference = null;
     public ?string $customerId = null;
     public ?string $totalAmount = null;
     public ?string $remainingAmount = null;

@@ -142,4 +142,22 @@ class InstallmentTest extends TestCase
         $this->assertStringContainsString('page=3', $uri);
         $this->assertStringContainsString('per_page=100', $uri);
     }
+
+    /* See SubscriptionTest::test_reference_is_sent_in_the_body(). */
+    public function test_reference_is_sent_in_the_body(): void
+    {
+        $bayarcash = $this->sdk([
+            $this->json(['id' => 'rins_1', 'reference' => 'INS-0001', 'status' => 'pending'], 201),
+        ]);
+
+        $installment = $bayarcash->createInstallment([
+            'portal_key' => 'pk', 'reference' => 'INS-0001', 'customer_id' => 'rcus_1', 'total_amount' => 600,
+            'installment_count' => 6, 'interval' => 'month', 'description' => 'Laptop',
+            'start_date' => '2027-01-01T10:00:00+08:00',
+        ]);
+
+        $this->assertSame('INS-0001', $this->lastBody()['reference']);
+        $this->assertContains('reference', array_keys(get_class_vars(InstallmentResource::class)));
+        $this->assertSame('INS-0001', $installment->reference);
+    }
 }
