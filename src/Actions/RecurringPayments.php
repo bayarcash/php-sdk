@@ -28,9 +28,12 @@ use Bayarcash\Resources\TransactionResource;
  * The three money requests also REQUIRE `reference`: the merchant's own id for
  * the agreement or charge (up to 36 of A-Z a-z 0-9 _ -), unique per merchant
  * per type forever. It is what makes a retry safe: a repeat with the same
- * reference and body answers the stored record (200, or 202 while it is still
- * pending — repeat later with the same reference), and a reference used with
- * another body is a 422 `reference_already_used`. A new try needs a new
+ * reference and body answers the stored agreement or charge (200), and a
+ * reference used with another body is a 422 `reference_already_used`. A 202 —
+ * on the first call as well as on a repeat — means the create is not settled
+ * yet: repeat later with the same reference. An agreement answers 202 as itself,
+ * `pending`; an on-demand charge answers 202 with no charge at all, only
+ * `reference` and `status` the string `pending`. A new try needs a new
  * reference. These three take no Idempotency-Key.
  *
  * The POSTs that mint a customer, a plan or a save-card intent (saveCard())
@@ -328,9 +331,15 @@ trait RecurringPayments
      * saveCard() first. No `return_url`: there is no customer page.
      *
      * The merchant's `reference` dedupes the charge, so no Idempotency-Key is sent: a
-     * repeat with the same reference and body answers the stored charge (200, or 202
-     * while it is still pending), and a reference used with another body is a 422
-     * `reference_already_used`. The charge answers the reference as `order_number`.
+     * repeat with the same reference and body answers the charge already booked (200),
+     * and a reference used with another body is a 422 `reference_already_used`. A
+     * charge answers the reference as `order_number`.
+     *
+     * A 202 means no charge yet — it can arrive on the first call (a timeout or an
+     * error between Bayarcash and the provider, or the provider not having settled
+     * it) as well as on a repeat. The resource then holds only `reference` and
+     * `status` the string `pending` (`id` is null): repeat later with the same
+     * reference to read the charge.
      *
      * @param  array  $data  Payment payload. `portal_key` and `reference` (up to 36 of
      *                       A-Z a-z 0-9 _ -, unique per merchant forever) are required.

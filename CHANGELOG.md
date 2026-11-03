@@ -40,9 +40,11 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   none is passed (the API requires it on the customer and plan POSTs).
 - `createSubscription()`, `createInstallment()` and `createOnDemandPayment()` require a merchant `reference` in
   `$data` (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type forever; the API validates it). A repeat with
-  the same reference and body answers the stored record (200, or 202 while it is still pending); a reference reused
-  with another body is a 422 `reference_already_used`. `SubscriptionResource` / `InstallmentResource` gain
-  `reference`; a charge answers it as `orderNumber`.
+  the same reference and body answers the stored agreement or charge (200); a reference reused with another body is
+  a 422 `reference_already_used`. A 202, on the first call or a repeat, means not settled yet — repeat later with the
+  same reference: an agreement answers as itself, `pending`; an on-demand 202 is no charge yet, a `TransactionResource`
+  holding only `reference` and `status` the string `pending` (`id` null). `SubscriptionResource` /
+  `InstallmentResource` / `TransactionResource` gain `reference`; a booked charge answers it as `orderNumber`.
 - **Breaking:** `createOnDemandPayment(array $data)` no longer takes `$idempotencyKey` and sends no `Idempotency-Key`:
   the `reference` dedupes the charge.
 - **Breaking:** `createSubscription(array $data)` / `createInstallment(array $data)` take no Idempotency-Key and

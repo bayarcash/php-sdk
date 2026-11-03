@@ -595,10 +595,12 @@ $transaction->toArray();
 >
 > Creating a subscription, an installment or an on-demand charge requires your own `reference`
 > (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type, forever). It makes a retry safe: a
-> repeat with the same reference and body returns the stored record (`200`, or `202` while it is
-> still pending — repeat later with the same reference), and a reference reused with a different
-> body is a `422 reference_already_used`. A new try needs a new reference. These three send no
-> `Idempotency-Key`.
+> repeat with the same reference and body returns the stored agreement or charge (`200`), and a
+> reference reused with a different body is a `422 reference_already_used`. A `202` — on the first
+> call as well as on a repeat — means not settled yet: repeat later with the same reference. An
+> agreement answers `202` as itself, `pending`; an on-demand charge answers `202` with no charge
+> yet, only `reference` and `status` the string `pending` (`id` is null). A new try needs a new
+> reference. These three send no `Idempotency-Key`.
 >
 > Creating a customer, a plan or a saved card sends an `Idempotency-Key` (the API requires it on
 > those POSTs). The SDK generates a UUID v4 when you pass none; pass your own so a retry returns
@@ -676,6 +678,9 @@ $charge = $bayarcash->createOnDemandPayment([
     'amount'      => 25.00,
     'description' => 'Wallet top up', // letters, digits, spaces, full stops, hyphens
 ]); // ->orderNumber is your reference, ->exchangeReferenceNumber the BPGR- reference
+if ($charge->status === 'pending') {
+    // 202, even on the first call: no charge yet, only ->reference. Repeat later with the same reference.
+}
 $charge->status == Fpx::STATUS_SUCCESS; // 3 charged, 2 declined, 1 still settling (callback follows)
 // A customer with no saved card throws ValidationException (422 customer_no_saved_card): saveCard() first.
 

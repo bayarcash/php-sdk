@@ -105,23 +105,42 @@ class OnDemandPaymentTest extends TestCase
         $this->assertSame('BPGR2026100600000042', $charge->exchangeReferenceNumber);
     }
 
-    /*
-     * A repeat with the same reference and body answers the stored charge with 200, and
-     * one still settling answers 202: both are answers, not errors.
-     */
+    /* A repeat with the same reference and body answers the charge already booked, with 200. */
     public function test_a_repeat_answer_is_the_charge_not_an_error(): void
     {
         $bayarcash = $this->sdk([
-            $this->json(CustomerTest::chargeRow(['order_number' => 'TOPUP-0001']), 200),
-            $this->json(CustomerTest::chargeRow(['order_number' => 'TOPUP-0001', 'status' => 1]), 202),
+            $this->json(CustomerTest::chargeRow(['id' => 'trx_3', 'order_number' => 'TOPUP-0001']), 200),
         ]);
-        $data = [
+
+        $charge = $bayarcash->createOnDemandPayment([
             'portal_key' => 'pk_test_portal', 'reference' => 'TOPUP-0001',
             'customer_id' => 'rcus_1', 'amount' => 25.00, 'description' => 'Top up',
-        ];
+        ]);
 
-        $this->assertSame('TOPUP-0001', $bayarcash->createOnDemandPayment($data)->orderNumber);
-        $this->assertEquals(1, $bayarcash->createOnDemandPayment($data)->status);
+        $this->assertSame('trx_3', $charge->id);
+        $this->assertSame('TOPUP-0001', $charge->orderNumber);
+    }
+
+    /*
+     * A 202 is no charge yet: the API answers only the reference and the string status
+     * `pending` (PaymentController::pendingAnswer(), unwrapped like every v3 answer). It
+     * can come on the first call (a timeout, an exchange 5xx, an exchange `new` answer)
+     * as well as on a repeat; repeat later with the same reference.
+     */
+    public function test_a_202_is_a_pending_reference_not_a_charge(): void
+    {
+        $bayarcash = $this->sdk([$this->json(['reference' => 'TOPUP-0001', 'status' => 'pending'], 202)]);
+
+        $pending = $bayarcash->createOnDemandPayment([
+            'portal_key' => 'pk_test_portal', 'reference' => 'TOPUP-0001',
+            'customer_id' => 'rcus_1', 'amount' => 25.00, 'description' => 'Top up',
+        ]);
+
+        $this->assertInstanceOf(TransactionResource::class, $pending);
+        $this->assertContains('reference', array_keys(get_class_vars(TransactionResource::class)));
+        $this->assertSame('TOPUP-0001', $pending->reference);
+        $this->assertSame('pending', $pending->status);
+        $this->assertNull($pending->id);
     }
 
     public function test_get_payment_returns_a_transaction_record(): void
