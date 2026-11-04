@@ -11,7 +11,6 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   - Installments: `createInstallment`, `getInstallments`, `getInstallment`, `updateInstallment`, `getInstallmentPayments`, plus `pauseInstallment`/`resumeInstallment`/`cancelInstallment`/`terminateInstallment`
   - On-demand payments: `createOnDemandPayment`, `getPayment`
   - `BoostRecurring` status/type/interval constants and label helpers
-- HTTP layer: JSON request bodies.
 - Recurring test suite (`tests/Recurring`, PHPUnit + Guzzle MockHandler).
 - `getAllTransactions()` accepts `recurring_type` (`on_demand`, `subscription` or `installment`); with `order_number`
   it is the lookup after an on-demand 202.
