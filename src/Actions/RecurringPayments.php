@@ -43,9 +43,11 @@ use Bayarcash\Resources\TransactionResource;
  * BEFORE ever charging again under a new reference, or the customer can be
  * charged twice. Right after the 202 an empty order-number answer is not yet
  * proof (the charge may still be booked by the callback or by Bayarcash's
- * background check, which starts 15 minutes after the charge and runs every 5);
- * if it still finds nothing after about 20 minutes, the charge was never
- * created - then, and only then, charge again under a new reference. While an
+ * background check, which starts 15 minutes after the charge and runs every 5).
+ * That is usually about 20 minutes; it can take longer while the exchange is
+ * unreachable or has not settled the charge. Rely on the callback: charge again
+ * under a new reference only once the callback says the charge failed, or the
+ * order number still finds nothing well after that. While an
  * agreement reads `pending` it carries `redirectUrl`; the card page lives 20
  * minutes from `createdAt`. After that an installment needs a new create (with a
  * new reference); a subscription still holds the customer's place on its plan
@@ -382,9 +384,11 @@ trait RecurringPayments
      * once it is booked, BEFORE ever charging again under a new reference —
      * otherwise the customer can be charged twice. Right after the 202 an empty
      * array is not yet proof: Bayarcash's background check first asks about the
-     * charge 15 minutes after it was recorded, then every 5 minutes. If it is still
-     * empty after about 20 minutes, the charge was never created - then, and only
-     * then, charge again under a new reference.
+     * charge 15 minutes after it was recorded, then every 5 minutes, so it is
+     * usually booked within about 20 minutes; it can take longer while the exchange
+     * is unreachable or has not settled the charge. Rely on the callback: charge
+     * again under a new reference only once the callback says the charge failed, or
+     * the array is still empty well after that.
      *
      * @param  array  $data  Payment payload. `portal_key` and `reference` (up to 36 of
      *                       A-Z a-z 0-9 _ -, unique per merchant forever,

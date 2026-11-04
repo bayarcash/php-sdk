@@ -613,9 +613,10 @@ $transaction->toArray();
 >   charged.** Wait for the callback or read the charge BEFORE ever charging again under a new
 >   reference — otherwise the customer can be charged twice. Right after the `202` an empty answer
 >   is not yet proof: Bayarcash's background check first asks about the charge 15 minutes after it
->   was recorded, then every 5 minutes. If `getTransactionByOrderNumber($reference)` still finds
->   nothing after about 20 minutes, the charge was never created — then, and only then, charge
->   again under a new reference.
+>   was recorded, then every 5 minutes, so it is usually booked within about 20 minutes; it can
+>   take longer while the exchange is unreachable or has not settled the charge. Rely on the
+>   callback: charge again under a new reference only once the callback says the charge failed,
+>   or `getTransactionByOrderNumber($reference)` still finds nothing well after that.
 >
 > One subscription per customer per plan: while the customer holds one to the plan that has not
 > ended (`pending` — including one still being created — `active` or `paused`), a new
@@ -715,7 +716,8 @@ if ($charge->status === 'pending') {
     // 202: no charge record yet, only ->reference, but the card may already have been charged.
     // Do not repeat, and never charge again under a new reference before you know: wait for the
     // charge callback, or read $bayarcash->getTransactionByOrderNumber('INV-1042') (TransactionResource[]).
-    // Still empty after about 20 minutes: the charge was never created, charge under a new reference.
+    // Usually booked within about 20 minutes, longer while the exchange is unreachable or has not settled
+    // it: charge under a new reference only once the callback says it failed, or still empty well after that.
 }
 $charge->status == Fpx::STATUS_SUCCESS; // 3 charged, 2 declined, 1 still settling (callback follows)
 // A customer with no saved card throws ValidationException (422 customer_no_saved_card): saveCard() first.

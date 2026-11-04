@@ -61,8 +61,9 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   with `getTransactionByOrderNumber($reference)` (an array of `TransactionResource`) once booked, BEFORE ever
   charging again under a new reference — otherwise the customer can be charged twice. Right after the 202 an empty
   answer is not yet proof (Bayarcash's background check first asks 15 minutes after the charge was recorded, then
-  every 5 minutes); if `getTransactionByOrderNumber($reference)` still finds nothing after about 20 minutes, the charge
-  was never created - then, and only then, charge again under a new reference. `SubscriptionResource` /
+  every 5 minutes), so it is usually booked within about 20 minutes; it can take longer while the exchange is unreachable
+  or has not settled the charge. Rely on the callback: charge again under a new reference only once the callback says
+  the charge failed, or `getTransactionByOrderNumber($reference)` still finds nothing well after that. `SubscriptionResource` /
   `InstallmentResource` / `TransactionResource` gain `reference`; a booked charge answers it as `orderNumber`.
 - **Breaking:** `createOnDemandPayment(array $data)` no longer takes `$idempotencyKey` and sends no `Idempotency-Key`:
   the `reference` dedupes the charge. A key passed as a second positional argument is ignored; a named
