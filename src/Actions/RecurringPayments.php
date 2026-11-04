@@ -48,6 +48,11 @@ use Bayarcash\Resources\TransactionResource;
  * a transport error is the same as a 202: the record may already exist and an
  * on-demand card may already have been charged, so read the outcome as above.
  *
+ * A 401, 403 or 429 on a create is not a 202: nothing was created and no card
+ * was charged. Send it again under a NEW reference (after a 429, once its
+ * Retry-After has passed). A 401 or 403 throws \Exception with the API's body,
+ * a 429 RateLimitExceededException.
+ *
  * After an on-demand 202 (or timeout) the card may already have been charged:
  * wait for the callback or read the charge BEFORE ever charging again under a
  * new reference, or the customer can be charged twice. Right after the 202 an
@@ -401,6 +406,10 @@ trait RecurringPayments
      * is unreachable or has not settled the charge. Rely on the callback: charge
      * again under a new reference only once the callback says the charge failed, or
      * `data` is still empty well after that.
+     *
+     * A 401, 403 or 429 is not a 202: nothing was created and the card was not
+     * charged. Charge again under a NEW reference (after a 429, once its
+     * Retry-After has passed).
      *
      * @param  array  $data  Payment payload. `portal_key` and `reference` (up to 36 of
      *                       A-Z a-z 0-9 _ -, unique per merchant forever,

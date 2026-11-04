@@ -626,6 +626,11 @@ $transaction->toArray();
 >   callback: charge again under a new reference only once the callback says the charge failed,
 >   or that lookup still finds nothing well after that.
 >
+> **A `401`, `403` or `429` on a create is not a `202`**: nothing was created and no card was
+> charged. Send it again under a **new** reference (after a `429`, once its `Retry-After` has
+> passed). A `401` or `403` throws `\Exception` with the API's body; a `429` throws
+> `RateLimitExceededException`.
+>
 > One subscription per customer per plan: while the customer holds one to the plan that has not
 > ended (`pending` — including one still being created — `active` or `paused`), a new
 > `createSubscription()` for the same customer and plan throws `ValidationException` (`422
