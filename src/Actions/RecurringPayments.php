@@ -41,9 +41,24 @@ use Bayarcash\Resources\TransactionResource;
  * TransactionResource), or from the charge callback. After an on-demand 202 the
  * card may already have been charged: wait for the callback or read the charge
  * BEFORE ever charging again under a new reference, or the customer can be
- * charged twice. While an agreement reads `pending` it carries `redirectUrl`; the
- * card page lives 20 minutes from `createdAt`, after that only a new create
- * (with a new reference) helps. These three take no Idempotency-Key.
+ * charged twice. Right after the 202 an empty order-number answer is not yet
+ * proof (the charge may still be booked by the callback or by Bayarcash's
+ * background check, which starts 15 minutes after the charge and runs every 5);
+ * if it still finds nothing after about 20 minutes, the charge was never
+ * created - then, and only then, charge again under a new reference. While an
+ * agreement reads `pending` it carries `redirectUrl`; the card page lives 20
+ * minutes from `createdAt`. After that an installment needs a new create (with a
+ * new reference); a subscription still holds the customer's place on its plan
+ * (below), so cancel it first. These three take no Idempotency-Key.
+ *
+ * One subscription per customer per plan: while the customer holds one to the
+ * plan that has not ended (`pending` - including one still being created -
+ * `active` or `paused`), createSubscription() for the same customer and plan is
+ * a 422 `customer_already_subscribed` ("The customer is already subscribed to
+ * this plan.", ValidationException), as the provider itself refuses it. Cancel
+ * the existing one first (cancelSubscription()); one still being created must
+ * settle first, or wait until it reads `expired` (about 30 minutes after its
+ * creation).
  *
  * Customers, plans and saveCard() take no Idempotency-Key either. A customer
  * email the merchant already holds is a 422 `customer_email_exists`. A plan
@@ -69,7 +84,8 @@ trait RecurringPayments
     /**
      * A customer email the merchant already holds is a 422 `customer_email_exists`
      * (ValidationException); look the customer up with
-     * getCustomers(['search' => $email]) instead.
+     * getCustomers(['search' => $email]) instead. When that search finds none, the
+     * email is held at the provider outside the merchant's records: contact support.
      */
     public function createCustomer(array $data)
     {
@@ -201,7 +217,10 @@ trait RecurringPayments
      *                               card page) — redirect the buyer there. On a 202
      *                               (not settled in time) `redirectUrl` is null: read
      *                               it with getSubscription(). A reference on file is
-     *                               a 422 `reference_already_used`. No Idempotency-Key.
+     *                               a 422 `reference_already_used`; a customer already
+     *                               subscribed to the plan (one not ended) is a 422
+     *                               `customer_already_subscribed` - cancel it first.
+     *                               No Idempotency-Key.
      */
     public function createSubscription(array $data)
     {
@@ -361,7 +380,11 @@ trait RecurringPayments
      * wait for the charge callback, or read the charge with
      * getTransactionByOrderNumber($reference) (an array of TransactionResource)
      * once it is booked, BEFORE ever charging again under a new reference —
-     * otherwise the customer can be charged twice.
+     * otherwise the customer can be charged twice. Right after the 202 an empty
+     * array is not yet proof: Bayarcash's background check first asks about the
+     * charge 15 minutes after it was recorded, then every 5 minutes. If it is still
+     * empty after about 20 minutes, the charge was never created - then, and only
+     * then, charge again under a new reference.
      *
      * @param  array  $data  Payment payload. `portal_key` and `reference` (up to 36 of
      *                       A-Z a-z 0-9 _ -, unique per merchant forever,

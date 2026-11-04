@@ -605,14 +605,29 @@ $transaction->toArray();
 > - Subscription / installment: `getSubscription($id)` / `getInstallment($id)` with the 202's id,
 >   or `getSubscriptions(['reference' => ...])` / `getInstallments(['reference' => ...])` when no
 >   answer arrived at all. While it reads `pending` it carries `redirectUrl`; the card page lives
->   20 minutes from `createdAt`, after that only a new create (with a new reference) helps.
+>   20 minutes from `createdAt`. After that an installment needs a new create (with a new
+>   reference); a subscription must be canceled first (`cancelSubscription()`), or left until it
+>   reads `expired` (about 30 minutes after creation) — see "one subscription per customer per plan".
 > - On-demand charge: `getTransactionByOrderNumber($reference)` (an array of `TransactionResource`)
 >   once it is booked, or the charge callback. **After a `202` the card may already have been
 >   charged.** Wait for the callback or read the charge BEFORE ever charging again under a new
->   reference — otherwise the customer can be charged twice.
+>   reference — otherwise the customer can be charged twice. Right after the `202` an empty answer
+>   is not yet proof: Bayarcash's background check first asks about the charge 15 minutes after it
+>   was recorded, then every 5 minutes. If `getTransactionByOrderNumber($reference)` still finds
+>   nothing after about 20 minutes, the charge was never created — then, and only then, charge
+>   again under a new reference.
+>
+> One subscription per customer per plan: while the customer holds one to the plan that has not
+> ended (`pending` — including one still being created — `active` or `paused`), a new
+> `createSubscription()` for the same customer and plan throws `ValidationException` (`422
+> customer_already_subscribed`, "The customer is already subscribed to this plan."), as the
+> provider itself refuses it. Cancel the existing one first; one still being created must settle
+> first. Installments have no plan and are not affected.
 >
 > None of these send an `Idempotency-Key`, and neither do customers, plans or saved cards. A
-> customer email you already hold is a `422 customer_email_exists`. A plan requires your own `code`
+> customer email you already hold is a `422 customer_email_exists`: find it with
+> `getCustomers(['search' => $email])`; when that finds none, the email is held at the provider
+> outside your records — contact support. A plan requires your own `code`
 > (the same rule as `reference`: `PLAN-1` and `plan-1` are the same code); a code already on file is a `422 plan_code_already_used`, and
 > `getPlans(['code' => ...])` finds the plan. Every `saveCard()` call makes a new card link:
 > creating one charges nothing, but every link is payable, so with `capture` two paid links are two
@@ -667,6 +682,8 @@ $subscription = $bayarcash->createSubscription([
 header('Location: ' . $subscription->redirectUrl); // the provider's card page, lives 20 minutes
 // On a 202 ->redirectUrl is null: read it from getSubscription($subscription->id) while pending.
 // Lost the answer altogether? $bayarcash->getSubscriptions(['reference' => 'SUB-0001'])
+// The customer already holds a subscription to this plan that has not ended: ValidationException
+// (422 customer_already_subscribed) - cancel that one first.
 
 $subscription = $bayarcash->getSubscription('rsub_xxx'); // ->plan holds the plan it bills on
 $bayarcash->pauseSubscription('rsub_xxx');
@@ -698,6 +715,7 @@ if ($charge->status === 'pending') {
     // 202: no charge record yet, only ->reference, but the card may already have been charged.
     // Do not repeat, and never charge again under a new reference before you know: wait for the
     // charge callback, or read $bayarcash->getTransactionByOrderNumber('INV-1042') (TransactionResource[]).
+    // Still empty after about 20 minutes: the charge was never created, charge under a new reference.
 }
 $charge->status == Fpx::STATUS_SUCCESS; // 3 charged, 2 declined, 1 still settling (callback follows)
 // A customer with no saved card throws ValidationException (422 customer_no_saved_card): saveCard() first.

@@ -41,7 +41,10 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   `['payment_url' => ...]`. `PaymentIntentResource` gains `tokenize`; a `validate_only` intent reads `authorized`.
 - **Breaking:** `createCustomer(array $data)`, `createPlan(array $data)` and `saveCard($customerId, array $data)` take
   no Idempotency-Key and send none (the protected `idempotencyHeaders()` / `generateIdempotencyKey()` helpers are
-  gone; a key passed as an extra argument is ignored). A known customer email is a 422 `customer_email_exists`.
+  gone; a key passed as an extra positional argument is ignored, but a named `idempotencyKey:` argument now
+  throws PHP's `Error` "Unknown named parameter $idempotencyKey" - drop it). A known customer email is a 422
+  `customer_email_exists`; when `getCustomers(['search' => $email])` finds none, the email is held at the provider
+  outside your records - contact support.
   `createPlan()` requires the merchant's own `code` (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant forever,
   case-insensitive: `PLAN-1` and `plan-1` are the same code);
   a code on file is a 422 `plan_code_already_used`. Every `saveCard()` call makes a new card link: with `capture`
@@ -56,13 +59,21 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   an on-demand 202 is no charge record yet, a `TransactionResource` holding only `reference` and `status` the string
   `pending` (`id` null). The card may already have been charged: wait for the charge callback, or read the charge
   with `getTransactionByOrderNumber($reference)` (an array of `TransactionResource`) once booked, BEFORE ever
-  charging again under a new reference — otherwise the customer can be charged twice. `SubscriptionResource` /
+  charging again under a new reference — otherwise the customer can be charged twice. Right after the 202 an empty
+  answer is not yet proof (Bayarcash's background check first asks 15 minutes after the charge was recorded, then
+  every 5 minutes); if `getTransactionByOrderNumber($reference)` still finds nothing after about 20 minutes, the charge
+  was never created - then, and only then, charge again under a new reference. `SubscriptionResource` /
   `InstallmentResource` / `TransactionResource` gain `reference`; a booked charge answers it as `orderNumber`.
 - **Breaking:** `createOnDemandPayment(array $data)` no longer takes `$idempotencyKey` and sends no `Idempotency-Key`:
-  the `reference` dedupes the charge.
+  the `reference` dedupes the charge. A key passed as a second positional argument is ignored; a named
+  `idempotencyKey:` argument now throws PHP's `Error` "Unknown named parameter $idempotencyKey".
 - **Breaking:** `createSubscription(array $data)` / `createInstallment(array $data)` take no Idempotency-Key and
   send none: every create is a new agreement, billed only once the payer authorizes it on the card page. A key
-  passed as a second argument is ignored.
+  passed as a second positional argument is ignored; a named `idempotencyKey:` argument now throws (as above).
+- `createSubscription()`: a customer already holding a subscription to the plan that has not ended (`pending`,
+  including one still being created, `active` or `paused`) is a 422 `customer_already_subscribed` ("The customer is
+  already subscribed to this plan.", `ValidationException`), as the provider itself refuses it: cancel the existing
+  one first (`cancelSubscription()`); one still being created must settle first, or wait until it reads `expired`.
 - `BoostRecurring::INTERVAL_*` are now `day`/`week`/`month`/`year` (the API rejects ISO durations).
 - **Breaking:** `getPayment()` returns a `TransactionResource`; `getSubscriptionPayments()` / `getInstallmentPayments()`
   return a paginated `['data' => TransactionResource[], 'meta', 'links']` and take `$page` / `$perPage`.
