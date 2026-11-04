@@ -27,20 +27,25 @@ use Bayarcash\Resources\TransactionResource;
  *
  * The three money requests also REQUIRE `reference`: the merchant's own id for
  * the agreement or charge (up to 36 of A-Z a-z 0-9 _ -), unique per merchant
- * per type forever. It is what makes a retry safe: a repeat with the same
- * reference and body answers the stored agreement or charge (200), and a
- * reference used with another body is a 422 `reference_already_used`. A 202 —
- * on the first call as well as on a repeat — means the create is not settled
- * yet: repeat later with the same reference. An agreement answers 202 as itself,
- * `pending`; an on-demand charge answers 202 with no charge at all, only
- * `reference` and `status` the string `pending`. A new try needs a new
- * reference. These three take no Idempotency-Key.
+ * per type forever. A reference already on file — any body, any state — is a
+ * 422 `reference_already_used` ("The reference X already exists.",
+ * ValidationException); the record on file is never answered back. So do not
+ * repeat a create to learn its outcome. A first call the provider did not
+ * settle in time answers 202: an agreement as itself, `pending`, without
+ * `redirectUrl`; an on-demand charge with no charge at all, only `reference` and
+ * `status` the string `pending`. Read the outcome instead: getSubscription() /
+ * getInstallment() by the 202's id, or getSubscriptions() / getInstallments()
+ * filtered by `reference` when no answer arrived; an on-demand charge with
+ * getTransactionByOrderNumber($reference) once it is booked (or from the charge
+ * callback). While an agreement reads `pending` it carries `redirectUrl`; the
+ * card page lives 20 minutes from `createdAt`, after that only a new create
+ * (with a new reference) helps. These three take no Idempotency-Key.
  *
- * The POSTs that mint a customer, a plan or a save-card intent (saveCard())
- * REQUIRE an `Idempotency-Key` header — the API answers 422 without one. The
- * SDK generates a UUID v4 when the caller passes none; pass your own (e.g.
- * derived from your own id) to make a retry return the original response
- * instead of minting a second record.
+ * Customers, plans and saveCard() take no Idempotency-Key either. A customer
+ * email the merchant already holds is a 422 `customer_email_exists`. A plan
+ * REQUIRES the merchant's own `code` (the same rule as `reference`, unique per
+ * merchant forever): a code on file is a 422 `plan_code_already_used`. Every
+ * saveCard() call makes a new card link (see saveCard()).
  *
  * The only webhook is the recurring charge callback (every charge, every status
  * change; see CallbackVerifications::verifyRecurringChargeCallbackData()). An
@@ -57,14 +62,15 @@ trait RecurringPayments
     // Customers
     // ---------------------------------------------------------------------
 
-    public function createCustomer(array $data, ?string $idempotencyKey = null)
+    /**
+     * A customer email the merchant already holds is a 422 `customer_email_exists`
+     * (ValidationException); look the customer up with getCustomers() instead.
+     */
+    public function createCustomer(array $data)
     {
         $this->ensureV3('createCustomer');
 
-        return new CustomerResource(
-            $this->post('customers', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
-            $this
-        );
+        return new CustomerResource($this->post('customers', ['json' => $data]), $this);
     }
 
     public function getCustomers(array $filters = [])
@@ -101,21 +107,20 @@ trait RecurringPayments
      * (validate_only) — getPaymentIntent() then reads `paid` or `authorized`
      * and echoes `tokenize`.
      *
-     * The key is optional on the API, but with one a retry replays the first
-     * payment intent instead of creating a second one.
+     * No Idempotency-Key: every call makes a new payment intent with its own
+     * link. Creating a link charges nothing, but every link is payable: with
+     * `capture` two paid links are two sales. After a timeout, look the intent
+     * up with getPaymentIntent() if you have its id, or create a new one and send
+     * the payer only the newest link.
      *
      * @return PaymentIntentResource
      */
-    public function saveCard(string $customerId, array $data, ?string $idempotencyKey = null)
+    public function saveCard(string $customerId, array $data)
     {
         $this->ensureV3('saveCard');
 
         return new PaymentIntentResource(
-            $this->post(
-                'customers/' . $customerId . '/save-card',
-                ['json' => $data],
-                $this->idempotencyHeaders($idempotencyKey)
-            ),
+            $this->post('customers/' . $customerId . '/save-card', ['json' => $data]),
             $this
         );
     }
@@ -137,16 +142,22 @@ trait RecurringPayments
     // Plans
     // ---------------------------------------------------------------------
 
-    public function createPlan(array $data, ?string $idempotencyKey = null)
+    /**
+     * @param  array  $data  Plan payload. `code` (the merchant's own plan code, up to
+     *                       36 of A-Z a-z 0-9 _ -, unique per merchant forever) is
+     *                       required, posted as given. A code on file is a 422
+     *                       `plan_code_already_used` (ValidationException); read the
+     *                       plan with getPlans(['code' => ...]) instead.
+     * @return PlanResource
+     */
+    public function createPlan(array $data)
     {
         $this->ensureV3('createPlan');
 
-        return new PlanResource(
-            $this->post('plans', ['json' => $data], $this->idempotencyHeaders($idempotencyKey)),
-            $this
-        );
+        return new PlanResource($this->post('plans', ['json' => $data]), $this);
     }
 
+    /** @param  array  $filters  e.g. `search`, `code`, `page`, `per_page`; passed through as given. */
     public function getPlans(array $filters = [])
     {
         $this->ensureV3('getPlans');
@@ -180,10 +191,9 @@ trait RecurringPayments
      *                       ISO-8601 timestamp (e.g. "2026-07-01T09:00:00+08:00")
      *                       at least an hour in the future; a bare date is rejected.
      * @return SubscriptionResource  `pending`, with `redirectUrl` (the provider's
-     *                               card page) — redirect the buyer there. A repeat
-     *                               with the same reference and body answers the
-     *                               stored agreement (200, or 202 while still
-     *                               pending); a reference used with another body is
+     *                               card page) — redirect the buyer there. On a 202
+     *                               (not settled in time) `redirectUrl` is null: read
+     *                               it with getSubscription(). A reference on file is
      *                               a 422 `reference_already_used`. No Idempotency-Key.
      */
     public function createSubscription(array $data)
@@ -194,6 +204,7 @@ trait RecurringPayments
         return new SubscriptionResource($this->post('subscriptions', ['json' => $data]), $this);
     }
 
+    /** @param  array  $filters  e.g. `reference`, `customer_id`, `status`, `search`, `page`, `per_page`; passed through as given. */
     public function getSubscriptions(array $filters = [])
     {
         $this->ensureV3('getSubscriptions');
@@ -257,9 +268,9 @@ trait RecurringPayments
      *                       (e.g. "2026-07-01T09:00:00+08:00") at least an hour
      *                       in the future; a bare date is rejected.
      * @return InstallmentResource  `pending`, with `redirectUrl` (the provider's
-     *                              card page) — redirect the buyer there. Repeats
-     *                              answer as on createSubscription(). No
-     *                              Idempotency-Key.
+     *                              card page) — redirect the buyer there. A 202 and
+     *                              a reference on file answer as on
+     *                              createSubscription(). No Idempotency-Key.
      */
     public function createInstallment(array $data)
     {
@@ -269,6 +280,7 @@ trait RecurringPayments
         return new InstallmentResource($this->post('installments', ['json' => $data]), $this);
     }
 
+    /** @param  array  $filters  e.g. `reference`, `customer_id`, `status`, `search`, `page`, `per_page`; passed through as given. */
     public function getInstallments(array $filters = [])
     {
         $this->ensureV3('getInstallments');
@@ -330,16 +342,16 @@ trait RecurringPayments
      * 422 `customer_no_saved_card` (ValidationException): save one with
      * saveCard() first. No `return_url`: there is no customer page.
      *
-     * The merchant's `reference` dedupes the charge, so no Idempotency-Key is sent: a
-     * repeat with the same reference and body answers the charge already booked (200),
-     * and a reference used with another body is a 422 `reference_already_used`. A
-     * charge answers the reference as `order_number`.
+     * The merchant's `reference` is the charge's identity, so no Idempotency-Key is
+     * sent: a reference already on file is a 422 `reference_already_used`
+     * (ValidationException), never the charge on file. A charge answers the
+     * reference as `order_number`.
      *
-     * A 202 means no charge yet — it can arrive on the first call (a timeout or an
-     * error between Bayarcash and the provider, or the provider not having settled
-     * it) as well as on a repeat. The resource then holds only `reference` and
-     * `status` the string `pending` (`id` is null): repeat later with the same
-     * reference to read the charge.
+     * A 202 means no charge yet (a timeout or an error between Bayarcash and the
+     * provider, or the provider not having settled it). The resource then holds
+     * only `reference` and `status` the string `pending` (`id` is null). Do not
+     * repeat the create: read the charge with getTransactionByOrderNumber($reference)
+     * once it is booked, or wait for the charge callback.
      *
      * @param  array  $data  Payment payload. `portal_key` and `reference` (up to 36 of
      *                       A-Z a-z 0-9 _ -, unique per merchant forever) are required.
@@ -390,25 +402,6 @@ trait RecurringPayments
         if (! isset($data['portal_key']) || $data['portal_key'] === '') {
             throw new \InvalidArgumentException("Required field 'portal_key' is missing");
         }
-    }
-
-    /**
-     * The Idempotency-Key header, generating a UUID v4 when the caller gave none:
-     * the API rejects a minting POST without one.
-     */
-    protected function idempotencyHeaders(?string $key): array
-    {
-        return ['Idempotency-Key' => $key ?: $this->generateIdempotencyKey()];
-    }
-
-    /** Generate an RFC-4122 v4 UUID for idempotency, without external deps. */
-    protected function generateIdempotencyKey(): string
-    {
-        $data = random_bytes(16);
-        $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
-        $data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
-
-        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 
     /** Build a query string from a filter array. */

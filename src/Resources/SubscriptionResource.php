@@ -27,8 +27,10 @@ class SubscriptionResource extends Resource
     public ?string $nextPaymentDate = null;
     public ?string $createdAt = null;
     /**
-     * The provider's card page the customer must complete to enrol. Only on the answer to
-     * createSubscription() (and its idempotent replay); null on every later read.
+     * The provider's card page the customer must complete to enrol, on every answer while
+     * the agreement is `pending` (null on a 202 until the provider has answered; read it
+     * again with a get). The page lives 20 minutes from `createdAt`. Null once the agreement
+     * has moved on.
      */
     public ?string $redirectUrl = null;
 }

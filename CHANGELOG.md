@@ -18,12 +18,15 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   every charge on every status change; it signs the card the charge ran on (`card_brand`, `card_country`,
   `card_last4`, `card_exp_month`, `card_exp_year`).
 - `verifyRecurringReturnUrlData()` for the signed landing on the recurring `return_url` (twelve fields + datetime + checksum).
-- `SubscriptionResource` / `InstallmentResource`: `redirectUrl` (the provider's card page, on the create answer only)
-  and `card['country']`. `BoostRecurring::STATUS_EXPIRED` (nobody completed the card page), terminal and labelled.
+- `SubscriptionResource` / `InstallmentResource`: `redirectUrl` (the provider's card page, on every answer while the
+  agreement is `pending`; null on a create's 202 until the provider has answered; the page lives 20 minutes from
+  `createdAt`) and `card['country']`. `BoostRecurring::STATUS_EXPIRED` (nobody completed the card page), terminal and labelled.
 - `TransactionResource`: `recurringCustomerId`, `subscription`, `installment`, and the fields the API already
   answered undeclared (a dynamic property, deprecated on PHP 8.2+): `platformFees`, `nettAmount`, `transactionType`,
   `applicationReason`, `paymentIntentId`. `SubscriptionResource`: `plan`.
-- `saveCard()` takes an optional Idempotency-Key.
+- `PlanResource::$code` — the merchant's own plan code. `getPlans(['code' => ...])` and
+  `getSubscriptions(['reference' => ...])` / `getInstallments(['reference' => ...])` find a record by the merchant's
+  id (list filters are passed through as given).
 - `BoostRecurring::STATUS_FAILED` and `STATUS_COMPLETED` (installments only); both count in `isTerminalStatus()`
   and have a `getStatusText()` label.
 
@@ -32,18 +35,24 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   `pending` `SubscriptionResource` / `InstallmentResource` with `redirectUrl` — redirect the buyer there — instead
   of a recurring intent with `url`. `createOnDemandPayment()` charges the saved card synchronously and returns the
   charge as a `TransactionResource` (no `return_url`); a customer with no saved card is a 422 `customer_no_saved_card`.
-- **Breaking:** `saveCard($customerId, array $data, $idempotencyKey = null)` creates a Credit Card payment intent that
+- **Breaking:** `saveCard($customerId, array $data)` creates a Credit Card payment intent that
   also saves the card: `$data` is the `createPaymentIntent()` body less the payer plus `tokenize` (`capture`, minimum
   2.00, or `validate_only`, minimum 1.00). The payer's name, email and phone come off the customer record. It returns a `PaymentIntentResource` — redirect to `->url` — instead of
   `['payment_url' => ...]`. `PaymentIntentResource` gains `tokenize`; a `validate_only` intent reads `authorized`.
-- `createCustomer`, `createPlan` and `saveCard` now always send an `Idempotency-Key`, generating a UUID v4 when
-  none is passed (the API requires it on the customer and plan POSTs).
+- **Breaking:** `createCustomer(array $data)`, `createPlan(array $data)` and `saveCard($customerId, array $data)` take
+  no Idempotency-Key and send none (the protected `idempotencyHeaders()` / `generateIdempotencyKey()` helpers are
+  gone; a key passed as an extra argument is ignored). A known customer email is a 422 `customer_email_exists`.
+  `createPlan()` requires the merchant's own `code` (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant forever);
+  a code on file is a 422 `plan_code_already_used`. Every `saveCard()` call makes a new card link: with `capture`
+  two paid links are two sales, so after a timeout look the intent up or send the payer only the newest link.
+  `createPaymentIntent()` keeps its optional key.
 - `createSubscription()`, `createInstallment()` and `createOnDemandPayment()` require a merchant `reference` in
-  `$data` (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type forever; the API validates it). A repeat with
-  the same reference and body answers the stored agreement or charge (200); a reference reused with another body is
-  a 422 `reference_already_used`. A 202, on the first call or a repeat, means not settled yet — repeat later with the
-  same reference: an agreement answers as itself, `pending`; an on-demand 202 is no charge yet, a `TransactionResource`
-  holding only `reference` and `status` the string `pending` (`id` null). `SubscriptionResource` /
+  `$data` (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type forever; the API validates it). A reference
+  already on file — any body, any state — is a 422 `reference_already_used` ("The reference X already exists.",
+  `ValidationException`); the record on file is never answered back. A first call not settled in time answers 202:
+  an agreement as itself, `pending`, without `redirectUrl` (read it with `getSubscription()` / `getInstallment()`);
+  an on-demand 202 is no charge yet, a `TransactionResource` holding only `reference` and `status` the string
+  `pending` (`id` null) — read the charge with `getTransactionByOrderNumber($reference)` once booked. `SubscriptionResource` /
   `InstallmentResource` / `TransactionResource` gain `reference`; a booked charge answers it as `orderNumber`.
 - **Breaking:** `createOnDemandPayment(array $data)` no longer takes `$idempotencyKey` and sends no `Idempotency-Key`:
   the `reference` dedupes the charge.

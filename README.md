@@ -594,17 +594,27 @@ $transaction->toArray();
 > charges `trx_`.
 >
 > Creating a subscription, an installment or an on-demand charge requires your own `reference`
-> (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type, forever). It makes a retry safe: a
-> repeat with the same reference and body returns the stored agreement or charge (`200`), and a
-> reference reused with a different body is a `422 reference_already_used`. A `202` — on the first
-> call as well as on a repeat — means not settled yet: repeat later with the same reference. An
-> agreement answers `202` as itself, `pending`; an on-demand charge answers `202` with no charge
-> yet, only `reference` and `status` the string `pending` (`id` is null). A new try needs a new
-> reference. These three send no `Idempotency-Key`.
+> (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type, forever). A reference already on
+> file — any body, any state — throws `ValidationException` (`422 reference_already_used`, "The
+> reference X already exists."); the record on file is never returned. Do not repeat a create to
+> learn its outcome: read it. A first call the provider did not settle in time answers `202`: an
+> agreement as itself, `pending`, without `redirectUrl`; an on-demand charge with no charge yet,
+> only `reference` and `status` the string `pending` (`id` is null). Then:
 >
-> Creating a customer, a plan or a saved card sends an `Idempotency-Key` (the API requires it on
-> those POSTs). The SDK generates a UUID v4 when you pass none; pass your own so a retry returns
-> the original response instead of creating a second record.
+> - Subscription / installment: `getSubscription($id)` / `getInstallment($id)` with the 202's id,
+>   or `getSubscriptions(['reference' => ...])` / `getInstallments(['reference' => ...])` when no
+>   answer arrived at all. While it reads `pending` it carries `redirectUrl`; the card page lives
+>   20 minutes from `createdAt`, after that only a new create (with a new reference) helps.
+> - On-demand charge: `getTransactionByOrderNumber($reference)` once it is booked, or the charge
+>   callback.
+>
+> None of these send an `Idempotency-Key`, and neither do customers, plans or saved cards. A
+> customer email you already hold is a `422 customer_email_exists`. A plan requires your own `code`
+> (the same rule as `reference`); a code already on file is a `422 plan_code_already_used`, and
+> `getPlans(['code' => ...])` finds the plan. Every `saveCard()` call makes a new card link:
+> creating one charges nothing, but every link is payable, so with `capture` two paid links are two
+> sales. After a timeout, look the intent up with `getPaymentIntent()` if you have its id, or create
+> a new one and send the payer only the newest link.
 
 ```php
 use Bayarcash\BoostRecurring;
@@ -612,7 +622,7 @@ use Bayarcash\Fpx;
 
 $bayarcash->setApiVersion('v3');
 
-// Customers (get-or-create by email)
+// Customers — a known email throws ValidationException (422 customer_email_exists)
 $customer = $bayarcash->createCustomer([
     'full_name' => 'Jane Doe',
     'email'     => 'jane@example.com',
@@ -635,6 +645,7 @@ header('Location: ' . $saveCard->url);
 
 // Plans — interval is day|week|month|year
 $plan = $bayarcash->createPlan([
+    'code' => 'PRO-MONTHLY', // required; your own plan code, unique forever (->code)
     'name' => 'Pro', 'description' => 'Pro plan',
     'price' => 49.90, 'currency' => 'MYR', 'interval' => BoostRecurring::INTERVAL_MONTHLY, // 'month'
 ]);
@@ -651,6 +662,8 @@ $subscription = $bayarcash->createSubscription([
     'return_url'  => 'https://merchant/return',
 ]);
 header('Location: ' . $subscription->redirectUrl); // the provider's card page, lives 20 minutes
+// On a 202 ->redirectUrl is null: read it from getSubscription($subscription->id) while pending.
+// Lost the answer altogether? $bayarcash->getSubscriptions(['reference' => 'SUB-0001'])
 
 $subscription = $bayarcash->getSubscription('rsub_xxx'); // ->plan holds the plan it bills on
 $bayarcash->pauseSubscription('rsub_xxx');
@@ -673,13 +686,14 @@ header('Location: ' . $installment->redirectUrl);
 // On-demand charge on a saved card — synchronous, the answer is the charge (no return_url)
 $charge = $bayarcash->createOnDemandPayment([
     'portal_key'  => 'your-portal-key',
-    'reference'   => 'INV-1042',      // a retry after a timeout with the same reference returns the same charge
+    'reference'   => 'INV-1042',      // unique forever: a repeat is a 422 reference_already_used
     'customer_id' => 'rcus_xxx',
     'amount'      => 25.00,
     'description' => 'Wallet top up', // letters, digits, spaces, full stops, hyphens
 ]); // ->orderNumber is your reference, ->exchangeReferenceNumber the BPGR- reference
 if ($charge->status === 'pending') {
-    // 202, even on the first call: no charge yet, only ->reference. Repeat later with the same reference.
+    // 202: no charge yet, only ->reference. Do not repeat: read it later with
+    // $bayarcash->getTransactionByOrderNumber('INV-1042'), or wait for the charge callback.
 }
 $charge->status == Fpx::STATUS_SUCCESS; // 3 charged, 2 declined, 1 still settling (callback follows)
 // A customer with no saved card throws ValidationException (422 customer_no_saved_card): saveCard() first.

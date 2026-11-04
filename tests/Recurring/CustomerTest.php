@@ -2,6 +2,7 @@
 
 namespace Bayarcash\Tests\Recurring;
 
+use Bayarcash\Exceptions\ValidationException;
 use Bayarcash\Fpx;
 use Bayarcash\Resources\CustomerResource;
 use Bayarcash\Resources\PaymentIntentResource;
@@ -37,19 +38,12 @@ class CustomerTest extends TestCase
         $this->assertArrayNotHasKey('portal_key', $this->lastBody());
     }
 
-    public function test_create_customer_sends_idempotency_key_when_given(): void
-    {
-        $bayarcash = $this->sdk([$this->json(['id' => 'rcus_1'], 201)]);
-
-        $bayarcash->createCustomer(
-            ['full_name' => 'Jane', 'email' => 'j@e.com', 'phone' => '011'],
-            'my-key-123'
-        );
-
-        $this->assertSame('my-key-123', $this->lastRequest()->getHeaderLine('Idempotency-Key'));
-    }
-
-    public function test_every_minting_post_auto_generates_an_idempotency_key(): void
+    /*
+     * The API takes no Idempotency-Key on these three (owner 2026-11-04): a known email
+     * refuses a second customer (422 customer_email_exists), a held plan `code` refuses a
+     * second plan (422 plan_code_already_used), and every save-card call is a new link.
+     */
+    public function test_customer_plan_and_save_card_send_no_idempotency_key(): void
     {
         $bayarcash = $this->sdk([
             $this->json(['id' => 'rcus_1'], 201),
@@ -57,34 +51,30 @@ class CustomerTest extends TestCase
             $this->json(self::saveCardIntent(), 201),
         ]);
 
-        // The API answers 422 without the header on the customer and plan POSTs.
-        // Agreement and on-demand creates take none: the merchant's `reference`
-        // dedupes them (SubscriptionTest, InstallmentTest, OnDemandPaymentTest).
         $bayarcash->createCustomer(['full_name' => 'Jane', 'email' => 'j@e.com', 'phone' => '011']);
-        $bayarcash->createPlan(['name' => 'Pro', 'price' => 10, 'interval' => 'month']);
+        $bayarcash->createPlan(['code' => 'PRO-M', 'name' => 'Pro', 'price' => 10, 'interval' => 'month']);
         $bayarcash->saveCard('rcus_1', self::saveCardBody());
 
-        $keys = array_map(function ($entry) {
-            return $entry['request']->getHeaderLine('Idempotency-Key');
-        }, $this->history);
-
-        $this->assertCount(3, $keys);
-        foreach ($keys as $key) {
-            $this->assertMatchesRegularExpression(
-                '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',
-                $key
-            );
+        $this->assertCount(3, $this->history);
+        foreach ($this->history as $entry) {
+            $this->assertFalse($entry['request']->hasHeader('Idempotency-Key'));
         }
-        $this->assertCount(3, array_unique($keys));
     }
 
-    public function test_save_card_sends_the_given_idempotency_key(): void
+    public function test_a_known_email_is_a_validation_exception(): void
     {
-        $bayarcash = $this->sdk([$this->json(self::saveCardIntent(), 201)]);
+        $answer = ['error' => [
+            'code' => 'customer_email_exists',
+            'message' => 'A customer with this email already exists for this merchant.',
+        ]];
+        $bayarcash = $this->sdk([$this->json($answer, 422)]);
 
-        $bayarcash->saveCard('rcus_1', self::saveCardBody(), 'card-key-1');
-
-        $this->assertSame('card-key-1', $this->lastRequest()->getHeaderLine('Idempotency-Key'));
+        try {
+            $bayarcash->createCustomer(['full_name' => 'Jane', 'email' => 'j@e.com', 'phone' => '011']);
+            $this->fail('Expected ValidationException was not thrown.');
+        } catch (ValidationException $e) {
+            $this->assertSame('customer_email_exists', $e->errors()['error']['code']);
+        }
     }
 
     public function test_get_customer_payments_returns_paginated_transactions(): void

@@ -4,6 +4,7 @@ namespace Bayarcash\Tests\Recurring;
 
 use Bayarcash\Resources\SubscriptionResource;
 use Bayarcash\Resources\TransactionResource;
+use Bayarcash\Exceptions\ValidationException;
 use Bayarcash\Tests\TestCase;
 
 class SubscriptionTest extends TestCase
@@ -197,18 +198,55 @@ class SubscriptionTest extends TestCase
     }
 
     /*
-     * A repeat with the same reference and body answers the stored agreement: 200 once the
-     * create is settled, 202 while it is still pending. Both are answers, not errors.
+     * A repeated reference is refused, whatever the body and whatever state the agreement on
+     * file is in (owner 2026-11-04, following Boost): 422 reference_already_used, nothing
+     * sent to the provider. It is not answered with the agreement on file.
      */
-    public function test_a_repeat_answer_is_the_agreement_not_an_error(): void
+    public function test_a_repeated_reference_is_a_validation_exception(): void
+    {
+        $bayarcash = $this->sdk([$this->json(['error' => [
+            'code' => 'reference_already_used',
+            'message' => 'The reference SUB-0001 already exists.',
+        ]], 422)]);
+
+        try {
+            $bayarcash->createSubscription([
+                'portal_key' => 'pk', 'reference' => 'SUB-0001', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1',
+            ]);
+            $this->fail('Expected ValidationException was not thrown.');
+        } catch (ValidationException $e) {
+            $this->assertSame('reference_already_used', $e->errors()['error']['code']);
+            $this->assertSame('The reference SUB-0001 already exists.', $e->errors()['error']['message']);
+        }
+    }
+
+    /*
+     * A first create that times out at the provider answers 202 with the agreement itself,
+     * `pending` and without `redirect_url`. The card page is read from the agreement while it
+     * is still pending (it lives 20 minutes from `created_at`); the `reference` list filter
+     * finds it when the 202 itself never arrived.
+     */
+    public function test_after_a_202_the_card_page_is_read_from_the_agreement(): void
     {
         $bayarcash = $this->sdk([
             $this->json(['id' => 'rsub_1', 'reference' => 'SUB-0001', 'status' => 'pending'], 202),
-            $this->json(['id' => 'rsub_1', 'reference' => 'SUB-0001', 'status' => 'active'], 200),
+            $this->json(['id' => 'rsub_1', 'reference' => 'SUB-0001', 'status' => 'pending',
+                'redirect_url' => 'https://boost.example/card/abc'], 200),
+            $this->json(['data' => [['id' => 'rsub_1', 'reference' => 'SUB-0001', 'status' => 'pending',
+                'redirect_url' => 'https://boost.example/card/abc']], 'meta' => ['total' => 1]], 200),
         ]);
-        $data = ['portal_key' => 'pk', 'reference' => 'SUB-0001', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1'];
 
-        $this->assertSame('pending', $bayarcash->createSubscription($data)->status);
-        $this->assertSame('active', $bayarcash->createSubscription($data)->status);
+        $created = $bayarcash->createSubscription([
+            'portal_key' => 'pk', 'reference' => 'SUB-0001', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1',
+        ]);
+        $this->assertSame('pending', $created->status);
+        $this->assertNull($created->redirectUrl);
+
+        $read = $bayarcash->getSubscription($created->id);
+        $this->assertSame('https://boost.example/card/abc', $read->redirectUrl);
+
+        $found = $bayarcash->getSubscriptions(['reference' => 'SUB-0001']);
+        $this->assertStringContainsString('reference=SUB-0001', (string) $this->lastRequest()->getUri());
+        $this->assertSame('https://boost.example/card/abc', $found['data'][0]->redirectUrl);
     }
 }

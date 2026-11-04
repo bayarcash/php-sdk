@@ -4,6 +4,7 @@ namespace Bayarcash\Tests\Recurring;
 
 use Bayarcash\Resources\TransactionResource;
 use Bayarcash\Resources\InstallmentResource;
+use Bayarcash\Exceptions\ValidationException;
 use Bayarcash\Tests\TestCase;
 
 class InstallmentTest extends TestCase
@@ -159,5 +160,38 @@ class InstallmentTest extends TestCase
         $this->assertSame('INS-0001', $this->lastBody()['reference']);
         $this->assertContains('reference', array_keys(get_class_vars(InstallmentResource::class)));
         $this->assertSame('INS-0001', $installment->reference);
+    }
+
+    /* As SubscriptionTest::test_a_repeated_reference_is_a_validation_exception(). */
+    public function test_a_repeated_reference_is_a_validation_exception(): void
+    {
+        $bayarcash = $this->sdk([$this->json(['error' => [
+            'code' => 'reference_already_used',
+            'message' => 'The reference INS-0001 already exists.',
+        ]], 422)]);
+
+        try {
+            $bayarcash->createInstallment([
+                'portal_key' => 'pk', 'reference' => 'INS-0001', 'customer_id' => 'rcus_1',
+                'total_amount' => 600, 'installment_count' => 6, 'interval' => 'month',
+                'description' => 'Laptop', 'start_date' => '2027-01-01T10:00:00+08:00',
+            ]);
+            $this->fail('Expected ValidationException was not thrown.');
+        } catch (ValidationException $e) {
+            $this->assertSame('reference_already_used', $e->errors()['error']['code']);
+        }
+    }
+
+    /* The merchant's reference is a list filter: it finds the agreement after a lost 202. */
+    public function test_get_installments_filters_by_reference(): void
+    {
+        $bayarcash = $this->sdk([$this->json(['data' => [['id' => 'rins_1', 'reference' => 'INS-0001',
+            'status' => 'pending', 'redirect_url' => 'https://boost.example/card/def']], 'meta' => []])]);
+
+        $result = $bayarcash->getInstallments(['reference' => 'INS-0001']);
+
+        $this->assertStringContainsString('reference=INS-0001', (string) $this->lastRequest()->getUri());
+        $this->assertSame('INS-0001', $result['data'][0]->reference);
+        $this->assertSame('https://boost.example/card/def', $result['data'][0]->redirectUrl);
     }
 }

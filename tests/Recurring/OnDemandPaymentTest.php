@@ -4,6 +4,7 @@ namespace Bayarcash\Tests\Recurring;
 
 use Bayarcash\Fpx;
 use Bayarcash\Resources\TransactionResource;
+use Bayarcash\Exceptions\ValidationException;
 use Bayarcash\Tests\TestCase;
 
 class OnDemandPaymentTest extends TestCase
@@ -105,27 +106,34 @@ class OnDemandPaymentTest extends TestCase
         $this->assertSame('BPGR2026100600000042', $charge->exchangeReferenceNumber);
     }
 
-    /* A repeat with the same reference and body answers the charge already booked, with 200. */
-    public function test_a_repeat_answer_is_the_charge_not_an_error(): void
+    /*
+     * A repeated reference is refused, whatever the body and whether or not the charge on
+     * file was booked (owner 2026-11-04): 422 reference_already_used, nothing charged.
+     */
+    public function test_a_repeated_reference_is_a_validation_exception(): void
     {
-        $bayarcash = $this->sdk([
-            $this->json(CustomerTest::chargeRow(['id' => 'trx_3', 'order_number' => 'TOPUP-0001']), 200),
-        ]);
+        $bayarcash = $this->sdk([$this->json(['error' => [
+            'code' => 'reference_already_used',
+            'message' => 'The reference TOPUP-0001 already exists.',
+        ]], 422)]);
 
-        $charge = $bayarcash->createOnDemandPayment([
-            'portal_key' => 'pk_test_portal', 'reference' => 'TOPUP-0001',
-            'customer_id' => 'rcus_1', 'amount' => 25.00, 'description' => 'Top up',
-        ]);
-
-        $this->assertSame('trx_3', $charge->id);
-        $this->assertSame('TOPUP-0001', $charge->orderNumber);
+        try {
+            $bayarcash->createOnDemandPayment([
+                'portal_key' => 'pk_test_portal', 'reference' => 'TOPUP-0001',
+                'customer_id' => 'rcus_1', 'amount' => 25.00, 'description' => 'Top up',
+            ]);
+            $this->fail('Expected ValidationException was not thrown.');
+        } catch (ValidationException $e) {
+            $this->assertSame('reference_already_used', $e->errors()['error']['code']);
+            $this->assertSame('The reference TOPUP-0001 already exists.', $e->errors()['error']['message']);
+        }
     }
 
     /*
      * A 202 is no charge yet: the API answers only the reference and the string status
-     * `pending` (PaymentController::pendingAnswer(), unwrapped like every v3 answer). It
-     * can come on the first call (a timeout, an exchange 5xx, an exchange `new` answer)
-     * as well as on a repeat; repeat later with the same reference.
+     * `pending` (PaymentController::pendingAnswer(), unwrapped like every v3 answer), on a
+     * first call that timed out or was not settled. Do not repeat it (a repeat is a 422):
+     * read the charge with getTransactionByOrderNumber($reference) once it is booked.
      */
     public function test_a_202_is_a_pending_reference_not_a_charge(): void
     {
