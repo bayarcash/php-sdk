@@ -48,10 +48,12 @@ use Bayarcash\Resources\TransactionResource;
  * a transport error is the same as a 202: the record may already exist and an
  * on-demand card may already have been charged, so read the outcome as above.
  *
- * A 401, 403 or 429 on a create is not a 202: nothing was created and no card
- * was charged. Send it again under a NEW reference (after a 429, once its
- * Retry-After has passed). A 401 or 403 throws \Exception with the API's body,
- * a 429 RateLimitExceededException.
+ * A 401, 403 or 429, or a 502 whose body's `error.code` is `upstream_auth`, on a
+ * create is not a 202: nothing was created and no card was charged. Send it
+ * again under a NEW reference. After a 429, wait a short while first: the SDK
+ * does not expose Retry-After, and ->rateLimitResetsAt is set only when the API
+ * sends X-RateLimit-Reset (null otherwise). A 401, 403 or 502 throws \Exception
+ * whose message is the API's body; a 429 throws RateLimitExceededException.
  *
  * After an on-demand 202 (or timeout) the card may already have been charged:
  * wait for the callback or read the charge BEFORE ever charging again under a
@@ -407,9 +409,9 @@ trait RecurringPayments
      * again under a new reference only once the callback says the charge failed, or
      * `data` is still empty well after that.
      *
-     * A 401, 403 or 429 is not a 202: nothing was created and the card was not
-     * charged. Charge again under a NEW reference (after a 429, once its
-     * Retry-After has passed).
+     * A 401, 403, 429, or a 502 `upstream_auth`, is not a 202: nothing was created
+     * and the card was not charged. Charge again under a NEW reference (after a
+     * 429, wait a short while first).
      *
      * @param  array  $data  Payment payload. `portal_key` and `reference` (up to 36 of
      *                       A-Z a-z 0-9 _ -, unique per merchant forever,

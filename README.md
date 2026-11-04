@@ -626,9 +626,11 @@ $transaction->toArray();
 >   callback: charge again under a new reference only once the callback says the charge failed,
 >   or that lookup still finds nothing well after that.
 >
-> **A `401`, `403` or `429` on a create is not a `202`**: nothing was created and no card was
-> charged. Send it again under a **new** reference (after a `429`, once its `Retry-After` has
-> passed). A `401` or `403` throws `\Exception` with the API's body; a `429` throws
+> **A `401`, `403` or `429`, or a `502` whose body's `error.code` is `upstream_auth`, on a create
+> is not a `202`**: nothing was created and no card was charged. Send it again under a **new**
+> reference. After a `429`, wait a short while first: the SDK does not expose `Retry-After`, and
+> `->rateLimitResetsAt` is set only when the API sends `X-RateLimit-Reset` (null otherwise). A
+> `401`, `403` or `502` throws `\Exception` whose message is the API's body; a `429` throws
 > `RateLimitExceededException`.
 >
 > One subscription per customer per plan: while the customer holds one to the plan that has not
