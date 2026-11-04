@@ -27,24 +27,28 @@ use Bayarcash\Resources\TransactionResource;
  *
  * The three money requests also REQUIRE `reference`: the merchant's own id for
  * the agreement or charge (up to 36 of A-Z a-z 0-9 _ -), unique per merchant
- * per type forever. A reference already on file — any body, any state — is a
+ * per type forever and case-insensitive (`INV-1` and `inv-1` are the same
+ * reference). A reference already on file — any body, any state — is a
  * 422 `reference_already_used` ("The reference X already exists.",
  * ValidationException); the record on file is never answered back. So do not
  * repeat a create to learn its outcome. A first call the provider did not
  * settle in time answers 202: an agreement as itself, `pending`, without
- * `redirectUrl`; an on-demand charge with no charge at all, only `reference` and
+ * `redirectUrl`; an on-demand charge with no charge record yet, only `reference` and
  * `status` the string `pending`. Read the outcome instead: getSubscription() /
  * getInstallment() by the 202's id, or getSubscriptions() / getInstallments()
  * filtered by `reference` when no answer arrived; an on-demand charge with
- * getTransactionByOrderNumber($reference) once it is booked (or from the charge
- * callback). While an agreement reads `pending` it carries `redirectUrl`; the
+ * getTransactionByOrderNumber($reference) once it is booked (an array of
+ * TransactionResource), or from the charge callback. After an on-demand 202 the
+ * card may already have been charged: wait for the callback or read the charge
+ * BEFORE ever charging again under a new reference, or the customer can be
+ * charged twice. While an agreement reads `pending` it carries `redirectUrl`; the
  * card page lives 20 minutes from `createdAt`, after that only a new create
  * (with a new reference) helps. These three take no Idempotency-Key.
  *
  * Customers, plans and saveCard() take no Idempotency-Key either. A customer
  * email the merchant already holds is a 422 `customer_email_exists`. A plan
  * REQUIRES the merchant's own `code` (the same rule as `reference`, unique per
- * merchant forever): a code on file is a 422 `plan_code_already_used`. Every
+ * merchant forever, case-insensitive: `PLAN-1` and `plan-1` are the same code): a code on file is a 422 `plan_code_already_used`. Every
  * saveCard() call makes a new card link (see saveCard()).
  *
  * The only webhook is the recurring charge callback (every charge, every status
@@ -64,7 +68,8 @@ trait RecurringPayments
 
     /**
      * A customer email the merchant already holds is a 422 `customer_email_exists`
-     * (ValidationException); look the customer up with getCustomers() instead.
+     * (ValidationException); look the customer up with
+     * getCustomers(['search' => $email]) instead.
      */
     public function createCustomer(array $data)
     {
@@ -144,8 +149,9 @@ trait RecurringPayments
 
     /**
      * @param  array  $data  Plan payload. `code` (the merchant's own plan code, up to
-     *                       36 of A-Z a-z 0-9 _ -, unique per merchant forever) is
-     *                       required, posted as given. A code on file is a 422
+     *                       36 of A-Z a-z 0-9 _ -, unique per merchant forever,
+     *                       case-insensitive: `PLAN-1` and `plan-1` are the same
+     *                       code) is required, posted as given. A code on file is a 422
      *                       `plan_code_already_used` (ValidationException); read the
      *                       plan with getPlans(['code' => ...]) instead.
      * @return PlanResource
@@ -187,7 +193,8 @@ trait RecurringPayments
      * @param  array  $data  Subscription payload. `portal_key` is required,
      *                       `reference` (the merchant's own id for this agreement,
      *                       up to 36 of A-Z a-z 0-9 _ -, unique per merchant
-     *                       forever) is required, and `start_date` must be a full
+     *                       forever, case-insensitive: `INV-1` and `inv-1` are
+     *                       the same reference) is required, and `start_date` must be a full
      *                       ISO-8601 timestamp (e.g. "2026-07-01T09:00:00+08:00")
      *                       at least an hour in the future; a bare date is rejected.
      * @return SubscriptionResource  `pending`, with `redirectUrl` (the provider's
@@ -347,14 +354,19 @@ trait RecurringPayments
      * (ValidationException), never the charge on file. A charge answers the
      * reference as `order_number`.
      *
-     * A 202 means no charge yet (a timeout or an error between Bayarcash and the
-     * provider, or the provider not having settled it). The resource then holds
-     * only `reference` and `status` the string `pending` (`id` is null). Do not
-     * repeat the create: read the charge with getTransactionByOrderNumber($reference)
-     * once it is booked, or wait for the charge callback.
+     * A 202 means no charge record yet (a timeout or an error between Bayarcash and
+     * the provider, or the provider not having settled it). The resource then holds
+     * only `reference` and `status` the string `pending` (`id` is null). The card
+     * may already have been charged. Do not repeat the create (a repeat is a 422):
+     * wait for the charge callback, or read the charge with
+     * getTransactionByOrderNumber($reference) (an array of TransactionResource)
+     * once it is booked, BEFORE ever charging again under a new reference —
+     * otherwise the customer can be charged twice.
      *
      * @param  array  $data  Payment payload. `portal_key` and `reference` (up to 36 of
-     *                       A-Z a-z 0-9 _ -, unique per merchant forever) are required.
+     *                       A-Z a-z 0-9 _ -, unique per merchant forever,
+     *                       case-insensitive: `INV-1` and `inv-1` are the same
+     *                       reference) are required.
      * @return TransactionResource
      */
     public function createOnDemandPayment(array $data)

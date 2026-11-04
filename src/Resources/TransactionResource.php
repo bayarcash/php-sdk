@@ -48,7 +48,7 @@ class TransactionResource extends Resource
     public ?array $installment = null;
 
     /*
-     * Only on a 202 from createOnDemandPayment(): no charge yet, the answer is just the
+     * Only on a 202 from createOnDemandPayment(): no charge record yet, the answer is just the
      * merchant's reference and `status` the string `pending` (every other field null).
      */
     public ?string $reference = null;

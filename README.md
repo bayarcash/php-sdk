@@ -307,7 +307,7 @@ $result = $bayarcash->getAllTransactions([
 ]);
 // $result['data'] => TransactionResource[], $result['meta'] => pagination meta
 
-$byOrder   = $bayarcash->getTransactionByOrderNumber('INV-1001');
+$byOrder   = $bayarcash->getTransactionByOrderNumber('INV-1001'); // TransactionResource[]
 $byEmail   = $bayarcash->getTransactionsByPayerEmail('ahmad@example.com');
 $byStatus  = $bayarcash->getTransactionsByStatus('3');
 $byChannel = $bayarcash->getTransactionsByPaymentChannel(Bayarcash::FPX);
@@ -594,23 +594,26 @@ $transaction->toArray();
 > charges `trx_`.
 >
 > Creating a subscription, an installment or an on-demand charge requires your own `reference`
-> (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type, forever). A reference already on
+> (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type, forever, case-insensitive: `INV-1`
+> and `inv-1` are the same reference). A reference already on
 > file — any body, any state — throws `ValidationException` (`422 reference_already_used`, "The
 > reference X already exists."); the record on file is never returned. Do not repeat a create to
 > learn its outcome: read it. A first call the provider did not settle in time answers `202`: an
-> agreement as itself, `pending`, without `redirectUrl`; an on-demand charge with no charge yet,
+> agreement as itself, `pending`, without `redirectUrl`; an on-demand charge with no charge record yet,
 > only `reference` and `status` the string `pending` (`id` is null). Then:
 >
 > - Subscription / installment: `getSubscription($id)` / `getInstallment($id)` with the 202's id,
 >   or `getSubscriptions(['reference' => ...])` / `getInstallments(['reference' => ...])` when no
 >   answer arrived at all. While it reads `pending` it carries `redirectUrl`; the card page lives
 >   20 minutes from `createdAt`, after that only a new create (with a new reference) helps.
-> - On-demand charge: `getTransactionByOrderNumber($reference)` once it is booked, or the charge
->   callback.
+> - On-demand charge: `getTransactionByOrderNumber($reference)` (an array of `TransactionResource`)
+>   once it is booked, or the charge callback. **After a `202` the card may already have been
+>   charged.** Wait for the callback or read the charge BEFORE ever charging again under a new
+>   reference — otherwise the customer can be charged twice.
 >
 > None of these send an `Idempotency-Key`, and neither do customers, plans or saved cards. A
 > customer email you already hold is a `422 customer_email_exists`. A plan requires your own `code`
-> (the same rule as `reference`); a code already on file is a `422 plan_code_already_used`, and
+> (the same rule as `reference`: `PLAN-1` and `plan-1` are the same code); a code already on file is a `422 plan_code_already_used`, and
 > `getPlans(['code' => ...])` finds the plan. Every `saveCard()` call makes a new card link:
 > creating one charges nothing, but every link is payable, so with `capture` two paid links are two
 > sales. After a timeout, look the intent up with `getPaymentIntent()` if you have its id, or create
@@ -692,8 +695,9 @@ $charge = $bayarcash->createOnDemandPayment([
     'description' => 'Wallet top up', // letters, digits, spaces, full stops, hyphens
 ]); // ->orderNumber is your reference, ->exchangeReferenceNumber the BPGR- reference
 if ($charge->status === 'pending') {
-    // 202: no charge yet, only ->reference. Do not repeat: read it later with
-    // $bayarcash->getTransactionByOrderNumber('INV-1042'), or wait for the charge callback.
+    // 202: no charge record yet, only ->reference, but the card may already have been charged.
+    // Do not repeat, and never charge again under a new reference before you know: wait for the
+    // charge callback, or read $bayarcash->getTransactionByOrderNumber('INV-1042') (TransactionResource[]).
 }
 $charge->status == Fpx::STATUS_SUCCESS; // 3 charged, 2 declined, 1 still settling (callback follows)
 // A customer with no saved card throws ValidationException (422 customer_no_saved_card): saveCard() first.
