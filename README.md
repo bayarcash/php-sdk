@@ -306,6 +306,7 @@ $result = $bayarcash->getAllTransactions([
     'payer_email'               => 'ahmad@example.com',
 ]);
 // $result['data'] => TransactionResource[], $result['meta'] => pagination meta
+// 'recurring_type' => 'on_demand' | 'subscription' | 'installment' narrows the list to recurring charges
 
 $byOrder   = $bayarcash->getTransactionByOrderNumber('INV-1001'); // TransactionResource[]
 $byEmail   = $bayarcash->getTransactionsByPayerEmail('ahmad@example.com');
@@ -600,7 +601,14 @@ $transaction->toArray();
 > reference X already exists."); the record on file is never returned. Do not repeat a create to
 > learn its outcome: read it. A first call the provider did not settle in time answers `202`: an
 > agreement as itself, `pending`, without `redirectUrl`; an on-demand charge with no charge record yet,
-> only `reference` and `status` the string `pending` (`id` is null). Then:
+> only `reference` and `status` the string `pending` (`id` is null).
+>
+> Every recurring call waits 90 seconds (or your `setTimeout()` when larger; the one-off calls keep
+> `setTimeout()`, 30 by default), so your own PHP and proxy limits must allow 90 seconds. A create
+> can still take longer: an on-demand charge with `customer_id` about 90 seconds, a create with an
+> inline `customer` up to 227 seconds (on-demand) or 182 seconds (subscription, installment).
+> **A timeout or a transport error on a create is the same as a `202`**: the record may already
+> exist and an on-demand card may already have been charged. Then:
 >
 > - Subscription / installment: `getSubscription($id)` / `getInstallment($id)` with the 202's id,
 >   or `getSubscriptions(['reference' => ...])` / `getInstallments(['reference' => ...])` when no
@@ -608,15 +616,15 @@ $transaction->toArray();
 >   20 minutes from `createdAt`. After that an installment needs a new create (with a new
 >   reference); a subscription must be canceled first (`cancelSubscription()`), or left until it
 >   reads `expired` (about 30 minutes after creation) — see "one subscription per customer per plan".
-> - On-demand charge: `getTransactionByOrderNumber($reference)` (an array of `TransactionResource`)
->   once it is booked, or the charge callback. **After a `202` the card may already have been
->   charged.** Wait for the callback or read the charge BEFORE ever charging again under a new
+> - On-demand charge: `getAllTransactions(['order_number' => $reference, 'recurring_type' => 'on_demand'])`
+>   (`data` holds `TransactionResource`) once it is booked, or the charge callback. **After a `202`
+>   the card may already have been charged.** Wait for the callback or read the charge BEFORE ever charging again under a new
 >   reference — otherwise the customer can be charged twice. Right after the `202` an empty answer
 >   is not yet proof: Bayarcash's background check first asks about the charge 15 minutes after it
 >   was recorded, then every 5 minutes, so it is usually booked within about 20 minutes; it can
 >   take longer while the exchange is unreachable or has not settled the charge. Rely on the
 >   callback: charge again under a new reference only once the callback says the charge failed,
->   or `getTransactionByOrderNumber($reference)` still finds nothing well after that.
+>   or that lookup still finds nothing well after that.
 >
 > One subscription per customer per plan: while the customer holds one to the plan that has not
 > ended (`pending` — including one still being created — `active` or `paused`), a new
@@ -676,13 +684,17 @@ $subscription = $bayarcash->createSubscription([
     'reference'   => 'SUB-0001',          // required; your own id, unique forever
     'customer_id' => 'rcus_xxx',          // or inline: 'customer' => ['full_name','email','phone']
     'plan_id'     => 'rpln_xxx',
-    'start_date'  => '2026-11-01T09:00:00+08:00', // ISO-8601 timestamp, an hour or more ahead
+    'start_date'  => date('c', strtotime('+1 day')), // ISO-8601 timestamp, an hour or more ahead
     'callback_url'=> 'https://merchant/webhook',
     'return_url'  => 'https://merchant/return',
 ]);
-header('Location: ' . $subscription->redirectUrl); // the provider's card page, lives 20 minutes
-// On a 202 ->redirectUrl is null: read it from getSubscription($subscription->id) while pending.
-// Lost the answer altogether? $bayarcash->getSubscriptions(['reference' => 'SUB-0001'])
+if ($subscription->redirectUrl) {
+    header('Location: ' . $subscription->redirectUrl); // the provider's card page, lives 20 minutes
+} else {
+    // 202: not settled in time - read it later with getSubscription($subscription->id) while pending.
+}
+// Lost the answer altogether (a timeout or a transport error)? Do not create it again; read it:
+// $bayarcash->getSubscriptions(['reference' => 'SUB-0001'])
 // The customer already holds a subscription to this plan that has not ended: ValidationException
 // (422 customer_already_subscribed) - cancel that one first.
 
@@ -700,9 +712,16 @@ $installment = $bayarcash->createInstallment([
     'interval'          => BoostRecurring::INTERVAL_MONTHLY,
     'installment_count' => 12,
     'description'       => 'Laptop, 12 payments', // required, up to 500 characters
-    'start_date'        => '2026-11-01T09:00:00+08:00',
+    'start_date'        => date('c', strtotime('+1 day')),
+    'callback_url'      => 'https://merchant/webhook',
+    'return_url'        => 'https://merchant/return',
 ]);
-header('Location: ' . $installment->redirectUrl);
+if ($installment->redirectUrl) {
+    header('Location: ' . $installment->redirectUrl);
+} else {
+    // 202: not settled in time - read it later with getInstallment($installment->id) while pending.
+}
+// Lost the answer altogether? $bayarcash->getInstallments(['reference' => 'INS-0001'])
 
 // On-demand charge on a saved card — synchronous, the answer is the charge (no return_url)
 $charge = $bayarcash->createOnDemandPayment([
@@ -714,8 +733,9 @@ $charge = $bayarcash->createOnDemandPayment([
 ]); // ->orderNumber is your reference, ->exchangeReferenceNumber the BPGR- reference
 if ($charge->status === 'pending') {
     // 202: no charge record yet, only ->reference, but the card may already have been charged.
-    // Do not repeat, and never charge again under a new reference before you know: wait for the
-    // charge callback, or read $bayarcash->getTransactionByOrderNumber('INV-1042') (TransactionResource[]).
+    // A timeout or a transport error on this call means the same. Do not repeat, and never charge
+    // again under a new reference before you know: wait for the charge callback, or read
+    // $bayarcash->getAllTransactions(['order_number' => 'INV-1042', 'recurring_type' => 'on_demand'])['data'].
     // Usually booked within about 20 minutes, longer while the exchange is unreachable or has not settled
     // it: charge under a new reference only once the callback says it failed, or still empty well after that.
 }

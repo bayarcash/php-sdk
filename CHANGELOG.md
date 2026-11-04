@@ -11,8 +11,17 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   - Installments: `createInstallment`, `getInstallments`, `getInstallment`, `updateInstallment`, `getInstallmentPayments`, plus `pauseInstallment`/`resumeInstallment`/`cancelInstallment`/`terminateInstallment`
   - On-demand payments: `createOnDemandPayment`, `getPayment`
   - `BoostRecurring` status/type/interval constants and label helpers
-- HTTP layer: per-request headers (`Idempotency-Key`) on every verb, and JSON request bodies.
+- HTTP layer: JSON request bodies.
 - Recurring test suite (`tests/Recurring`, PHPUnit + Guzzle MockHandler).
+- `getAllTransactions()` accepts `recurring_type` (`on_demand`, `subscription` or `installment`); with `order_number`
+  it is the lookup after an on-demand 202.
+- Every recurring call waits 90 seconds, or `setTimeout()` when larger; the one-off endpoints keep `setTimeout()`
+  (30 by default). Your own PHP and proxy limits must allow 90 seconds. A create can still take longer (an on-demand
+  charge with `customer_id` about 90 seconds; a create with an inline `customer` up to 227 seconds on-demand, 182
+  seconds for a subscription or installment). A timeout or a transport error on a create is the same as a 202: the
+  record may already exist and an on-demand card may already have been charged, so read the outcome (the callback,
+  `getSubscription()` / `getInstallment()` / `getSubscriptions(['reference' => ...])`, or the on-demand lookup above)
+  and never charge again under a new reference until it says so.
 - `getCustomerPayments($customerId, $page, $perPage)` — every charge for a customer, including on-demand charges.
 - `verifyRecurringChargeCallbackData()` for the recurring charge callback — the only recurring webhook, sent for
   every charge on every status change; it signs the card the charge ran on (`card_brand`, `card_country`,
@@ -58,12 +67,13 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   an agreement as itself, `pending`, without `redirectUrl` (read it with `getSubscription()` / `getInstallment()`);
   an on-demand 202 is no charge record yet, a `TransactionResource` holding only `reference` and `status` the string
   `pending` (`id` null). The card may already have been charged: wait for the charge callback, or read the charge
-  with `getTransactionByOrderNumber($reference)` (an array of `TransactionResource`) once booked, BEFORE ever
-  charging again under a new reference — otherwise the customer can be charged twice. Right after the 202 an empty
+  with `getAllTransactions(['order_number' => $reference, 'recurring_type' => 'on_demand'])` (`data` holds
+  `TransactionResource`) once booked, BEFORE ever charging again under a new reference — otherwise the customer can
+  be charged twice. Right after the 202 an empty
   answer is not yet proof (Bayarcash's background check first asks 15 minutes after the charge was recorded, then
   every 5 minutes), so it is usually booked within about 20 minutes; it can take longer while the exchange is unreachable
   or has not settled the charge. Rely on the callback: charge again under a new reference only once the callback says
-  the charge failed, or `getTransactionByOrderNumber($reference)` still finds nothing well after that. `SubscriptionResource` /
+  the charge failed, or that lookup still finds nothing well after that. `SubscriptionResource` /
   `InstallmentResource` / `TransactionResource` gain `reference`; a booked charge answers it as `orderNumber`.
 - **Breaking:** `createOnDemandPayment(array $data)` no longer takes `$idempotencyKey` and sends no `Idempotency-Key`:
   the `reference` dedupes the charge. A key passed as a second positional argument is ignored; a named

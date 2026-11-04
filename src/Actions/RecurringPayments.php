@@ -37,17 +37,26 @@ use Bayarcash\Resources\TransactionResource;
  * `status` the string `pending`. Read the outcome instead: getSubscription() /
  * getInstallment() by the 202's id, or getSubscriptions() / getInstallments()
  * filtered by `reference` when no answer arrived; an on-demand charge with
- * getTransactionByOrderNumber($reference) once it is booked (an array of
- * TransactionResource), or from the charge callback. After an on-demand 202 the
- * card may already have been charged: wait for the callback or read the charge
- * BEFORE ever charging again under a new reference, or the customer can be
- * charged twice. Right after the 202 an empty order-number answer is not yet
- * proof (the charge may still be booked by the callback or by Bayarcash's
+ * getAllTransactions(['order_number' => $reference, 'recurring_type' => 'on_demand'])
+ * once it is booked (`data` holds TransactionResource), or from the charge callback.
+ *
+ * Every recurring call waits 90 seconds (or setTimeout() when larger; one-off
+ * calls keep setTimeout(), 30 by default), so your own PHP and proxy limits must
+ * allow 90 seconds. A create can still take longer: an on-demand charge with
+ * `customer_id` up to about 90 seconds, a create with an inline `customer` up to
+ * 227 seconds (on-demand) or 182 seconds (subscription, installment). A timeout or
+ * a transport error is the same as a 202: the record may already exist and an
+ * on-demand card may already have been charged, so read the outcome as above.
+ *
+ * After an on-demand 202 (or timeout) the card may already have been charged:
+ * wait for the callback or read the charge BEFORE ever charging again under a
+ * new reference, or the customer can be charged twice. Right after the 202 an
+ * empty lookup is not yet proof (the charge may still be booked by the callback or by Bayarcash's
  * background check, which starts 15 minutes after the charge and runs every 5).
  * That is usually about 20 minutes; it can take longer while the exchange is
  * unreachable or has not settled the charge. Rely on the callback: charge again
  * under a new reference only once the callback says the charge failed, or the
- * order number still finds nothing well after that. While an
+ * lookup still finds nothing well after that. While an
  * agreement reads `pending` it carries `redirectUrl`; the card page lives 20
  * minutes from `createdAt`. After that an installment needs a new create (with a
  * new reference); a subscription still holds the customer's place on its plan
@@ -93,21 +102,21 @@ trait RecurringPayments
     {
         $this->ensureV3('createCustomer');
 
-        return new CustomerResource($this->post('customers', ['json' => $data]), $this);
+        return new CustomerResource($this->recurringRequest('POST', 'customers', ['json' => $data]), $this);
     }
 
     public function getCustomers(array $filters = [])
     {
         $this->ensureV3('getCustomers');
 
-        return $this->paginate($this->get('customers' . $this->query($filters)), CustomerResource::class);
+        return $this->paginate($this->recurringRequest('GET', 'customers' . $this->query($filters)), CustomerResource::class);
     }
 
     public function getCustomer(string $customerId)
     {
         $this->ensureV3('getCustomer');
 
-        return new CustomerResource($this->get('customers/' . $customerId), $this);
+        return new CustomerResource($this->recurringRequest('GET', 'customers/' . $customerId), $this);
     }
 
     /**
@@ -143,7 +152,7 @@ trait RecurringPayments
         $this->ensureV3('saveCard');
 
         return new PaymentIntentResource(
-            $this->post('customers/' . $customerId . '/save-card', ['json' => $data]),
+            $this->recurringRequest('POST', 'customers/' . $customerId . '/save-card', ['json' => $data]),
             $this
         );
     }
@@ -178,7 +187,7 @@ trait RecurringPayments
     {
         $this->ensureV3('createPlan');
 
-        return new PlanResource($this->post('plans', ['json' => $data]), $this);
+        return new PlanResource($this->recurringRequest('POST', 'plans', ['json' => $data]), $this);
     }
 
     /** @param  array  $filters  e.g. `search`, `code`, `page`, `per_page`; passed through as given. */
@@ -186,21 +195,21 @@ trait RecurringPayments
     {
         $this->ensureV3('getPlans');
 
-        return $this->paginate($this->get('plans' . $this->query($filters)), PlanResource::class);
+        return $this->paginate($this->recurringRequest('GET', 'plans' . $this->query($filters)), PlanResource::class);
     }
 
     public function getPlan(string $planId)
     {
         $this->ensureV3('getPlan');
 
-        return new PlanResource($this->get('plans/' . $planId), $this);
+        return new PlanResource($this->recurringRequest('GET', 'plans/' . $planId), $this);
     }
 
     public function updatePlan(string $planId, array $data)
     {
         $this->ensureV3('updatePlan');
 
-        return new PlanResource($this->patch('plans/' . $planId, ['json' => $data]), $this);
+        return new PlanResource($this->recurringRequest('PATCH', 'plans/' . $planId, ['json' => $data]), $this);
     }
 
     // ---------------------------------------------------------------------
@@ -229,7 +238,7 @@ trait RecurringPayments
         $this->ensureV3('createSubscription');
         $this->requirePortalKey($data);
 
-        return new SubscriptionResource($this->post('subscriptions', ['json' => $data]), $this);
+        return new SubscriptionResource($this->recurringRequest('POST', 'subscriptions', ['json' => $data]), $this);
     }
 
     /** @param  array  $filters  e.g. `reference`, `customer_id`, `status`, `search`, `page`, `per_page`; passed through as given. */
@@ -237,21 +246,21 @@ trait RecurringPayments
     {
         $this->ensureV3('getSubscriptions');
 
-        return $this->paginate($this->get('subscriptions' . $this->query($filters)), SubscriptionResource::class);
+        return $this->paginate($this->recurringRequest('GET', 'subscriptions' . $this->query($filters)), SubscriptionResource::class);
     }
 
     public function getSubscription(string $subscriptionId)
     {
         $this->ensureV3('getSubscription');
 
-        return new SubscriptionResource($this->get('subscriptions/' . $subscriptionId), $this);
+        return new SubscriptionResource($this->recurringRequest('GET', 'subscriptions/' . $subscriptionId), $this);
     }
 
     public function updateSubscription(string $subscriptionId, array $data)
     {
         $this->ensureV3('updateSubscription');
 
-        return new SubscriptionResource($this->patch('subscriptions/' . $subscriptionId, ['json' => $data]), $this);
+        return new SubscriptionResource($this->recurringRequest('PATCH', 'subscriptions/' . $subscriptionId, ['json' => $data]), $this);
     }
 
     public function pauseSubscription(string $subscriptionId)
@@ -305,7 +314,7 @@ trait RecurringPayments
         $this->ensureV3('createInstallment');
         $this->requirePortalKey($data);
 
-        return new InstallmentResource($this->post('installments', ['json' => $data]), $this);
+        return new InstallmentResource($this->recurringRequest('POST', 'installments', ['json' => $data]), $this);
     }
 
     /** @param  array  $filters  e.g. `reference`, `customer_id`, `status`, `search`, `page`, `per_page`; passed through as given. */
@@ -313,21 +322,21 @@ trait RecurringPayments
     {
         $this->ensureV3('getInstallments');
 
-        return $this->paginate($this->get('installments' . $this->query($filters)), InstallmentResource::class);
+        return $this->paginate($this->recurringRequest('GET', 'installments' . $this->query($filters)), InstallmentResource::class);
     }
 
     public function getInstallment(string $installmentId)
     {
         $this->ensureV3('getInstallment');
 
-        return new InstallmentResource($this->get('installments/' . $installmentId), $this);
+        return new InstallmentResource($this->recurringRequest('GET', 'installments/' . $installmentId), $this);
     }
 
     public function updateInstallment(string $installmentId, array $data)
     {
         $this->ensureV3('updateInstallment');
 
-        return new InstallmentResource($this->patch('installments/' . $installmentId, ['json' => $data]), $this);
+        return new InstallmentResource($this->recurringRequest('PATCH', 'installments/' . $installmentId, ['json' => $data]), $this);
     }
 
     public function pauseInstallment(string $installmentId)
@@ -377,18 +386,21 @@ trait RecurringPayments
      *
      * A 202 means no charge record yet (a timeout or an error between Bayarcash and
      * the provider, or the provider not having settled it). The resource then holds
-     * only `reference` and `status` the string `pending` (`id` is null). The card
-     * may already have been charged. Do not repeat the create (a repeat is a 422):
+     * only `reference` and `status` the string `pending` (`id` is null). A timeout
+     * or a transport error is the same as a 202: this call waits 90 seconds (or
+     * setTimeout() when larger; your own PHP and proxy limits must allow it), and a
+     * charge with `customer_id` can take about that long, one with an inline
+     * `customer` up to 227 seconds. The card may already have been charged. Do not repeat the create (a repeat is a 422):
      * wait for the charge callback, or read the charge with
-     * getTransactionByOrderNumber($reference) (an array of TransactionResource)
-     * once it is booked, BEFORE ever charging again under a new reference —
-     * otherwise the customer can be charged twice. Right after the 202 an empty
-     * array is not yet proof: Bayarcash's background check first asks about the
-     * charge 15 minutes after it was recorded, then every 5 minutes, so it is
+     * getAllTransactions(['order_number' => $reference, 'recurring_type' => 'on_demand'])
+     * (`data` holds TransactionResource) once it is booked, BEFORE ever charging
+     * again under a new reference — otherwise the customer can be charged twice.
+     * Right after the 202 an empty `data` is not yet proof: Bayarcash's background
+     * check first asks about the charge 15 minutes after it was recorded, then every 5 minutes, so it is
      * usually booked within about 20 minutes; it can take longer while the exchange
      * is unreachable or has not settled the charge. Rely on the callback: charge
      * again under a new reference only once the callback says the charge failed, or
-     * the array is still empty well after that.
+     * `data` is still empty well after that.
      *
      * @param  array  $data  Payment payload. `portal_key` and `reference` (up to 36 of
      *                       A-Z a-z 0-9 _ -, unique per merchant forever,
@@ -401,7 +413,7 @@ trait RecurringPayments
         $this->ensureV3('createOnDemandPayment');
         $this->requirePortalKey($data);
 
-        return new TransactionResource($this->post('payments', ['json' => $data]), $this);
+        return new TransactionResource($this->recurringRequest('POST', 'payments', ['json' => $data]), $this);
     }
 
     /**
@@ -412,7 +424,7 @@ trait RecurringPayments
     {
         $this->ensureV3('getPayment');
 
-        return new TransactionResource($this->get('payments/' . $paymentId), $this);
+        return new TransactionResource($this->recurringRequest('GET', 'payments/' . $paymentId), $this);
     }
 
     // ---------------------------------------------------------------------
@@ -443,6 +455,16 @@ trait RecurringPayments
         }
     }
 
+    /**
+     * Every recurring call waits 90 seconds, or setTimeout() when that is larger: a
+     * create can take that long at the API (a timeout is the same as a 202 - read the
+     * record, never send it again under a new reference). One-off calls keep setTimeout().
+     */
+    protected function recurringRequest(string $verb, string $uri, array $payload = [])
+    {
+        return $this->request($verb, $uri, $payload, [], max(90.0, (float) $this->timeout));
+    }
+
     /** Build a query string from a filter array. */
     protected function query(array $filters): string
     {
@@ -453,7 +475,7 @@ trait RecurringPayments
     protected function chargePage(string $uri, int $page, int $perPage): array
     {
         return $this->paginate(
-            $this->get($uri . $this->query(['page' => $page, 'per_page' => $perPage])),
+            $this->recurringRequest('GET', $uri . $this->query(['page' => $page, 'per_page' => $perPage])),
             TransactionResource::class
         );
     }

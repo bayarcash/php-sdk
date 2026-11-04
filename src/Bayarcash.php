@@ -474,6 +474,7 @@ class Bayarcash
             'payment_channel',
             'exchange_reference_number',
             'payer_email',
+            'recurring_type',
         ];
 
         // Filter out disallowed parameters

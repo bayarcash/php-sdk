@@ -73,12 +73,13 @@ trait MakesHttpRequests
      * @param $uri
      * @param array $payload
      * @param array $headers
+     * @param float|null $timeout  Seconds for this request; null uses setTimeout().
      * @return mixed|string
      */
-    protected function request($verb, $uri, array $payload = [], array $headers = [])
+    protected function request($verb, $uri, array $payload = [], array $headers = [], $timeout = null)
     {
         // Per request so setTimeout() also applies to a client passed to setToken()/useSandbox().
-        $options = ['timeout' => (float) $this->timeout];
+        $options = ['timeout' => (float) ($timeout === null ? $this->timeout : $timeout)];
 
         if (isset($payload['json'])) {
             $options['json'] = $payload['json'];
