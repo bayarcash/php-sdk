@@ -256,4 +256,28 @@ class EndpointsTest extends TestCase
         $this->assertSame('PATCH', $req->getMethod());
         $this->assertSame('/v3/mandates/mnd_1/deactivate', $req->getUri()->getPath());
     }
+
+    public function test_get_transaction_by_order_number_encodes_the_order_number(): void
+    {
+        $sdk = $this->sdk([new Response(200, [], json_encode(['data' => []]))]);
+
+        $sdk->getTransactionByOrderNumber('A&B #1+2');
+
+        $req = $this->lastRequest();
+        $this->assertSame('/v3/transactions', $req->getUri()->getPath());
+        $this->assertSame('order_number=A%26B+%231%2B2', $req->getUri()->getQuery());
+        $this->assertSame('', $req->getUri()->getFragment());
+    }
+
+    public function test_get_transactions_by_status_encodes_the_status(): void
+    {
+        $sdk = $this->sdk([new Response(200, [], json_encode(['data' => []]))]);
+
+        $sdk->getTransactionsByStatus('3&x #y+z');
+
+        $req = $this->lastRequest();
+        $this->assertSame('/v3/transactions', $req->getUri()->getPath());
+        $this->assertSame('status=3%26x+%23y%2Bz', $req->getUri()->getQuery());
+        $this->assertSame('', $req->getUri()->getFragment());
+    }
 }

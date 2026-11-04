@@ -97,6 +97,10 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
 - `PaymentResource`, `ChargeResource` and the `BoostRecurring::PAYMENT_*` constants — charges are transaction records,
   whose status is the `Fpx::STATUS_*` code.
 
+### Fixed
+- `getTransactionByOrderNumber()` and `getTransactionsByStatus()` URL-encode their value, so an order number or
+  status containing `&`, `#`, `+` or a space is sent as given.
+
 ## 3.2.1 - 2026-11-01
 
 ### Added
