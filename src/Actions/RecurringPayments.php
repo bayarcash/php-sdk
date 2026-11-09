@@ -156,6 +156,10 @@ trait RecurringPayments
      * `payment_channel` may be left out (the API defaults it to Credit Card,
      * 12); any other channel is refused with 422.
      *
+     * The optional `checksum` is checked against the customer's name and email:
+     * pass getCustomer($id)->fullName / ->email to createSaveCardChecksumValue(),
+     * or omit the checksum.
+     *
      * The card is saved once the payment succeeds (capture) or is authorized
      * (validate_only) — getPaymentIntent() then reads `paid` or `authorized`
      * and echoes `tokenize`.
