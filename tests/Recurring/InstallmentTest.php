@@ -16,7 +16,7 @@ class InstallmentTest extends TestCase
                 'type' => 'installment', 'id' => 'rins_2', 'portal_key' => 'pk_test_portal',
                 'status' => 'pending', 'total_amount' => '1200.00', 'installment_count' => 12,
                 'interval' => 'month', 'description' => 'Laptop, 12 payments',
-                'redirect_url' => 'https://boost.example/card/def',
+                'redirect_url' => 'https://provider.example/card/def',
             ], 201),
         ]);
 
@@ -35,7 +35,7 @@ class InstallmentTest extends TestCase
         $this->assertSame('pending', $installment->status);
         $this->assertSame('pk_test_portal', $installment->portalKey);
         $this->assertSame(12, $installment->installmentCount);
-        $this->assertSame('https://boost.example/card/def', $installment->redirectUrl);
+        $this->assertSame('https://provider.example/card/def', $installment->redirectUrl);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('installments', (string) $this->lastRequest()->getUri());
         $this->assertSame(12, $this->lastBody()['installment_count']);
@@ -186,12 +186,12 @@ class InstallmentTest extends TestCase
     public function test_get_installments_filters_by_reference(): void
     {
         $bayarcash = $this->sdk([$this->json(['data' => [['id' => 'rins_1', 'reference' => 'INS-0001',
-            'status' => 'pending', 'redirect_url' => 'https://boost.example/card/def']], 'meta' => []])]);
+            'status' => 'pending', 'redirect_url' => 'https://provider.example/card/def']], 'meta' => []])]);
 
         $result = $bayarcash->getInstallments(['reference' => 'INS-0001']);
 
         $this->assertStringContainsString('reference=INS-0001', (string) $this->lastRequest()->getUri());
         $this->assertSame('INS-0001', $result['data'][0]->reference);
-        $this->assertSame('https://boost.example/card/def', $result['data'][0]->redirectUrl);
+        $this->assertSame('https://provider.example/card/def', $result['data'][0]->redirectUrl);
     }
 }

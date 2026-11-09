@@ -10,7 +10,7 @@ use Bayarcash\Resources\SubscriptionResource;
 use Bayarcash\Resources\TransactionResource;
 
 /**
- * Boost recurring-payment endpoints (v3 only).
+ * Recurring-payment endpoints (v3 only).
  *
  * Every create returns its resource directly. createSubscription() and
  * createInstallment() create the agreement at the provider, `pending`, and
@@ -329,7 +329,7 @@ trait RecurringPayments
      *                       `reference` is required (as on createSubscription()),
      *                       `description` (what the customer is paying off, up to
      *                       500 characters) is required, `interval` is one of
-     *                       day|week|month|year (BoostRecurring::INTERVAL_*), and
+     *                       day|week|month|year (Recurring::INTERVAL_*), and
      *                       `start_date` must be a full ISO-8601 timestamp
      *                       (e.g. "2026-07-01T09:00:00+08:00") at least an hour
      *                       in the future; a bare date is rejected.

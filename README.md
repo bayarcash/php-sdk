@@ -28,7 +28,7 @@ The [Bayarcash](https://bayarcash.com/) SDK provides an expressive interface for
 - [Portals & FPX Banks](#portals--fpx-banks)
 - [Error Handling](#error-handling)
 - [Response Objects](#response-objects)
-- [Boost Recurring Payments](#boost-recurring-payments-v3-api-only)
+- [Recurring Payments](#recurring-payments-v3-api-only)
 - [Security Recommendations](#security-recommendations)
 - [Support](#support)
 
@@ -289,7 +289,7 @@ if ((int) $callbackData['status'] === Fpx::STATUS_SUCCESS) {
 echo Fpx::getStatusText((int) $callbackData['status']); // e.g. "Successful"
 ```
 
-A `validate_only` save-card (see [Boost Recurring Payments](#boost-recurring-payments-v3-api-only))
+A `validate_only` save-card (see [Recurring Payments](#recurring-payments-v3-api-only))
 succeeds with status `6` (`Fpx::STATUS_AUTHORIZED`) in its callback, not `3`: the card is authorized
 and saved, no money moves.
 
@@ -596,7 +596,7 @@ Any missing field is `null`. Convert a resource (including nested resources) to 
 $transaction->toArray();
 ```
 
-## Boost Recurring Payments (V3 API only)
+## Recurring Payments (V3 API only)
 
 > Requires `$bayarcash->setApiVersion('v3')`. A subscription or installment is created at the
 > provider, `pending`, and comes back with `redirectUrl` — the provider's card page. Redirect
@@ -672,7 +672,7 @@ $transaction->toArray();
 > a new one and send the payer only the newest link.
 
 ```php
-use Bayarcash\BoostRecurring;
+use Bayarcash\Recurring;
 use Bayarcash\Fpx;
 
 $bayarcash->setApiVersion('v3');
@@ -710,7 +710,7 @@ header('Location: ' . $saveCard->url);
 $plan = $bayarcash->createPlan([
     'code' => 'PRO-MONTHLY', // required; your own plan code, unique forever (->code)
     'name' => 'Pro', 'description' => 'Pro plan',
-    'price' => 49.90, 'currency' => 'MYR', 'interval' => BoostRecurring::INTERVAL_MONTHLY, // 'month'
+    'price' => 49.90, 'currency' => 'MYR', 'interval' => Recurring::INTERVAL_MONTHLY, // 'month'
 ]);
 $plan = $bayarcash->updatePlan('rpln_xxx', ['price' => 59.90]);
 
@@ -745,7 +745,7 @@ $installment = $bayarcash->createInstallment([
     'reference'         => 'INS-0001',
     'customer_id'       => 'rcus_xxx',
     'total_amount'      => 1200.00,
-    'interval'          => BoostRecurring::INTERVAL_MONTHLY,
+    'interval'          => Recurring::INTERVAL_MONTHLY,
     'installment_count' => 12,
     'description'       => 'Laptop, 12 payments', // required, up to 500 characters
     'start_date'        => date('c', strtotime('+1 day')),
@@ -814,11 +814,11 @@ foreach ($page['data'] as $charge) {
 $charge = $bayarcash->getPayment('trx_xxx'); // or the provider charge id
 ```
 
-Status constants: `BoostRecurring::STATUS_PENDING|STATUS_ACTIVE|STATUS_PAUSED|STATUS_CANCELED|STATUS_EXPIRED|STATUS_TERMINATED|STATUS_FAILED|STATUS_COMPLETED`
+Status constants: `Recurring::STATUS_PENDING|STATUS_ACTIVE|STATUS_PAUSED|STATUS_CANCELED|STATUS_EXPIRED|STATUS_TERMINATED|STATUS_FAILED|STATUS_COMPLETED`
 (American spelling `canceled`). `failed` is an enrolment whose card was declined on the card
 page; `expired` one nobody completed within 30 minutes of creation; `completed` is for
 installments only - every instalment collected (a subscription ends as `canceled` or
-`terminated`). `BoostRecurring::isTerminalStatus()` is true for `canceled`, `expired`,
+`terminated`). `Recurring::isTerminalStatus()` is true for `canceled`, `expired`,
 `terminated`, `failed` and `completed`; `getStatusText()` labels each. Charge statuses use the
 transaction codes in `Fpx::STATUS_*`.
 
