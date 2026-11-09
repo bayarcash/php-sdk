@@ -37,6 +37,9 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   id (list filters are passed through as given).
 - `BoostRecurring::STATUS_FAILED` and `STATUS_COMPLETED` (installments only); both count in `isTerminalStatus()`
   and have a `getStatusText()` label.
+- `Fpx::STATUS_AUTHORIZED` (6), `Fpx::STATUS_VOID` (7) and `Fpx::STATUS_REFUND` (8) with `getStatusText()` labels; a `validate_only` save-card callback succeeds with 6.
+- `Bayarcash\Exceptions\ApiErrorException` (extends `\Exception`) for every error status without its own exception (401, 403, 409, 5xx, a 504 proxy page): the message is still the raw body, `getCode()` / `status()` is the HTTP status, plus `body()`, `errors()` and `errorCode()` (`error.code`, e.g. `save_card_refused`, `upstream_conflict`).
+- `createSaveCardChecksumValue($secretKey, $data, $customerFullName, $customerEmail)` — the optional `saveCard()` checksum, signed with the customer's name and email as stored and `payment_channel` 12 when left out.
 
 ### Changed
 - **Breaking:** `createSubscription()` / `createInstallment()` create the agreement at the provider and return the
@@ -88,6 +91,7 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   already subscribed to this plan.", `ValidationException`), as the provider itself refuses it: cancel the existing
   one first (`cancelSubscription()`); one still being created must settle first, or wait until it reads `expired`.
 - `BoostRecurring::INTERVAL_*` are now `day`/`week`/`month`/`year` (the API rejects ISO durations).
+- `saveCard()` waits 120 seconds, or `setTimeout()` when larger; the other recurring calls stay at 90.
 - **Breaking:** `getPayment()` returns a `TransactionResource`; `getSubscriptionPayments()` / `getInstallmentPayments()`
   return a paginated `['data' => TransactionResource[], 'meta', 'links']` and take `$page` / `$perPage`.
 - **Breaking:** `getSubscription()` / `getInstallment()` no longer carry `->charges` (the API stopped embedding them).
