@@ -40,9 +40,9 @@ use Bayarcash\Resources\TransactionResource;
  * getAllTransactions(['order_number' => $reference, 'recurring_type' => 'on_demand'])
  * once it is booked (`data` holds TransactionResource), or from the charge callback.
  *
- * Every recurring call waits 90 seconds (or setTimeout() when larger; one-off
- * calls keep setTimeout(), 30 by default), so your own PHP and proxy limits must
- * allow 90 seconds. A create can still take longer: an on-demand charge with
+ * Every recurring call waits 90 seconds, saveCard() 120 (or setTimeout() when
+ * larger; one-off calls keep setTimeout(), 30 by default), so your own PHP and
+ * proxy limits must allow 90 seconds (120 for saveCard()). A create can still take longer: an on-demand charge with
  * `customer_id` up to about 90 seconds, a create with an inline `customer` up to
  * 227 seconds (on-demand) or 182 seconds (subscription, installment). A timeout or
  * a transport error is the same as a 202: the record may already exist and an
@@ -158,6 +158,10 @@ trait RecurringPayments
      * up with getPaymentIntent() if you have its id, or create a new one and send
      * the payer only the newest link.
      *
+     * saveCard() waits 120 seconds (or setTimeout() when larger), longer than the
+     * other recurring calls: the API can take up to about 100 seconds to start the
+     * card page.
+     *
      * @return PaymentIntentResource
      */
     public function saveCard(string $customerId, array $data)
@@ -165,7 +169,7 @@ trait RecurringPayments
         $this->ensureV3('saveCard');
 
         return new PaymentIntentResource(
-            $this->recurringRequest('POST', 'customers/' . $customerId . '/save-card', ['json' => $data]),
+            $this->recurringRequest('POST', 'customers/' . $customerId . '/save-card', ['json' => $data], 120.0),
             $this
         );
     }
@@ -473,13 +477,14 @@ trait RecurringPayments
     }
 
     /**
-     * Every recurring call waits 90 seconds, or setTimeout() when that is larger: a
-     * create can take that long at the API (a timeout is the same as a 202 - read the
-     * record, never send it again under a new reference). One-off calls keep setTimeout().
+     * Every recurring call waits 90 seconds (saveCard() 120), or setTimeout() when that
+     * is larger: a create can take that long at the API (a timeout is the same as a 202 -
+     * read the record, never send it again under a new reference). One-off calls keep
+     * setTimeout().
      */
-    protected function recurringRequest(string $verb, string $uri, array $payload = [])
+    protected function recurringRequest(string $verb, string $uri, array $payload = [], float $minimumTimeout = 90.0)
     {
-        return $this->request($verb, $uri, $payload, [], max(90.0, (float) $this->timeout));
+        return $this->request($verb, $uri, $payload, [], max($minimumTimeout, (float) $this->timeout));
     }
 
     /** Build a query string from a filter array. */

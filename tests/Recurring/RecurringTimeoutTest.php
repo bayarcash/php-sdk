@@ -6,8 +6,8 @@ use Bayarcash\Actions\RecurringPayments;
 use Bayarcash\Tests\TestCase;
 
 /**
- * Every recurring call waits 90 seconds (or setTimeout() when larger): the API can take
- * that long on a create. The one-off endpoints keep the instance timeout (30 by default).
+ * Every recurring call waits 90 seconds, saveCard() 120 (or setTimeout() when larger): the
+ * API can take that long on a create. The one-off endpoints keep the instance timeout (30 by default).
  */
 class RecurringTimeoutTest extends TestCase
 {
@@ -25,6 +25,25 @@ class RecurringTimeoutTest extends TestCase
         $sdk->createOnDemandPayment(['portal_key' => 'pk', 'reference' => 'INV-1', 'customer_id' => 'rcus_1', 'amount' => 10]);
 
         $this->assertSame(90.0, $this->lastTimeout());
+    }
+
+    public function test_save_card_waits_120_seconds(): void
+    {
+        $sdk = $this->sdk([$this->json(['id' => 'pi_1'])]);
+
+        $sdk->saveCard('rcus_1', ['portal_key' => 'pk', 'tokenize' => 'capture']);
+
+        $this->assertSame(120.0, $this->lastTimeout());
+    }
+
+    public function test_a_larger_set_timeout_applies_to_save_card_too(): void
+    {
+        $sdk = $this->sdk([$this->json(['id' => 'pi_1'])]);
+        $sdk->setTimeout(150);
+
+        $sdk->saveCard('rcus_1', ['portal_key' => 'pk', 'tokenize' => 'capture']);
+
+        $this->assertSame(150.0, $this->lastTimeout());
     }
 
     public function test_a_one_off_call_keeps_the_default_30_seconds(): void
@@ -60,7 +79,7 @@ class RecurringTimeoutTest extends TestCase
         $this->assertSame(60.0, $this->lastTimeout());
     }
 
-    public function test_every_recurring_method_waits_90_seconds(): void
+    public function test_every_recurring_method_but_save_card_waits_90_seconds(): void
     {
         $methods = array_filter(
             (new \ReflectionClass(RecurringPayments::class))->getMethods(\ReflectionMethod::IS_PUBLIC),
@@ -81,7 +100,8 @@ class RecurringTimeoutTest extends TestCase
             call_user_func_array([$sdk, $method->getName()], $args);
 
             $this->assertCount(1, $this->history, $method->getName() . ' sends one request');
-            $this->assertSame(90.0, $this->lastTimeout(), $method->getName() . ' waits 90 seconds');
+            $expected = $method->getName() === 'saveCard' ? 120.0 : 90.0;
+            $this->assertSame($expected, $this->lastTimeout(), $method->getName() . ' waits ' . $expected . ' seconds');
         }
     }
 

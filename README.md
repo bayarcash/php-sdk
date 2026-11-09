@@ -603,8 +603,9 @@ $transaction->toArray();
 > agreement as itself, `pending`, without `redirectUrl`; an on-demand charge with no charge record yet,
 > only `reference` and `status` the string `pending` (`id` is null).
 >
-> Every recurring call waits 90 seconds (or your `setTimeout()` when larger; the one-off calls keep
-> `setTimeout()`, 30 by default), so your own PHP and proxy limits must allow 90 seconds. A create
+> Every recurring call waits 90 seconds, `saveCard()` 120 (or your `setTimeout()` when larger; the
+> one-off calls keep `setTimeout()`, 30 by default), so your own PHP and proxy limits must allow 90
+> seconds (120 for `saveCard()`). A create
 > can still take longer: an on-demand charge with `customer_id` about 90 seconds, a create with an
 > inline `customer` up to 227 seconds (on-demand) or 182 seconds (subscription, installment).
 > **A timeout or a transport error on a create is the same as a `202`**: the record may already
