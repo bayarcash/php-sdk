@@ -129,8 +129,14 @@ trait RecurringPayments
     /**
      * Save a card for the customer: creates a Credit Card payment intent that
      * also vaults the payer's card against the customer, for later on-demand
-     * charges. Redirect the payer to the returned intent's `url`, exactly as
-     * for createPaymentIntent().
+     * charges. The returned intent's `url` is the provider's card page: redirect
+     * the payer there at once. It lives 30 minutes and is used once; the
+     * Bayarcash checkout does not open a save-card intent.
+     *
+     * When the card page cannot be started the API answers 403
+     * (`save_card_refused`, with the reason) or 502 (`save_card_failed`, retry
+     * with a new call), as `{"error": {"code", "message", "payment_intent_id"}}`.
+     * This SDK throws both as an \Exception whose message is that JSON body.
      *
      * `$data` is the createPaymentIntent() body less the payer (portal_key,
      * order_number, amount, optional checksum, ...) plus the required

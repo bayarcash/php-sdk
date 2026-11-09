@@ -46,7 +46,8 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
 - **Breaking:** `saveCard($customerId, array $data)` creates a Credit Card payment intent that
   also saves the card: `$data` is the `createPaymentIntent()` body less the payer plus `tokenize` (`capture`, minimum
   2.00, or `validate_only`, minimum 1.00). The payer's name, email and phone come off the customer record. It returns a `PaymentIntentResource` — redirect to `->url` — instead of
-  `['payment_url' => ...]`. `PaymentIntentResource` gains `tokenize`; a `validate_only` intent reads `authorized`.
+  `['payment_url' => ...]`. `url` is the provider's card page (30 minutes, used once; the checkout does not open a
+  save-card intent); a card page that cannot be started is a 403 `save_card_refused` or 502 `save_card_failed`. `PaymentIntentResource` gains `tokenize`; a `validate_only` intent reads `authorized`.
 - **Breaking:** `createCustomer(array $data)`, `createPlan(array $data)` and `saveCard($customerId, array $data)` take
   no Idempotency-Key and send none (the protected `idempotencyHeaders()` / `generateIdempotencyKey()` helpers are
   gone; a key passed as an extra positional argument is ignored, but a named `idempotencyKey:` argument now

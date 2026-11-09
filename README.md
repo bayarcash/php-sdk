@@ -674,6 +674,9 @@ $saveCard  = $bayarcash->saveCard('rcus_xxx', [
     'amount'                 => '1.00',
     'tokenize'               => 'validate_only',
 ]); // PaymentIntentResource; payment_channel defaults to 12 (Credit Card)
+// url is the provider's card page: redirect at once. It lives 30 minutes and is used once.
+// If it cannot be started, saveCard() throws: 403 save_card_refused or 502 save_card_failed, the
+// message being the JSON body {"error": {"code", "message", "payment_intent_id"}}.
 header('Location: ' . $saveCard->url);
 // Later: $bayarcash->getPaymentIntent($saveCard->id)->status is 'authorized' (validate_only) or 'paid' (capture)
 
