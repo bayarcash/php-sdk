@@ -15,6 +15,7 @@ class Bayarcash
         Actions\CallbackVerifications,
         Actions\ChecksumGenerator,
         Actions\ManualBankTransfer,
+        Actions\RecurringPayments,
         MakesHttpRequests;
 
     /*
@@ -473,6 +474,7 @@ class Bayarcash
             'payment_channel',
             'exchange_reference_number',
             'payer_email',
+            'recurring_type',
         ];
 
         // Filter out disallowed parameters
@@ -515,7 +517,7 @@ class Bayarcash
             throw new \Exception('The getTransactionByOrderNumber method is only available for API version v3.');
         }
 
-        $response = $this->get('transactions?order_number=' . $orderNumber);
+        $response = $this->get('transactions?order_number=' . urlencode($orderNumber));
         return $this->transformCollection(
             $response['data'] ?? [],
             TransactionResource::class
@@ -557,7 +559,7 @@ class Bayarcash
             throw new \Exception('The getTransactionsByStatus method is only available for API version v3.');
         }
 
-        $response = $this->get('transactions?status=' . $status);
+        $response = $this->get('transactions?status=' . urlencode($status));
         return $this->transformCollection(
             $response['data'] ?? [],
             TransactionResource::class

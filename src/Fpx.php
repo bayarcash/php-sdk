@@ -13,6 +13,9 @@ class Fpx
     const STATUS_SUCCESS = 3;
     const STATUS_CANCELLED = 4;
     const STATUS_ABANDONED = 5;
+    const STATUS_AUTHORIZED = 6;
+    const STATUS_VOID = 7;
+    const STATUS_REFUND = 8;
 
     protected static function getStatusLabels()
     {
@@ -23,6 +26,9 @@ class Fpx
             self::STATUS_SUCCESS => 'Successful',
             self::STATUS_FAILED => 'Failed',
             self::STATUS_ABANDONED => 'Abandoned',
+            self::STATUS_AUTHORIZED => 'Authorized',
+            self::STATUS_VOID => 'Void',
+            self::STATUS_REFUND => 'Refund',
         ];
     }
 

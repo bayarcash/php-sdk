@@ -117,4 +117,48 @@ class ChecksumGeneratorTest extends TestCase
             $this->sdk->createFpxDirectDebitMaintenanceChecksumValue($this->secret, $data)
         );
     }
+
+    /**
+     * The api checks a save-card checksum over amount|order_number|payer_email|payer_name|payment_channel
+     * (ksort), with the customer's full_name as stored and email, and payment_channel 12 when left out
+     * (bayarcash-api CustomerApiTest "checks a save-card checksum against the customer's name and email").
+     */
+    public function test_save_card_checksum_matches_the_api_recipe(): void
+    {
+        $data = ['portal_key' => 'pk', 'order_number' => 'SC-SUM', 'amount' => '2.00', 'tokenize' => 'capture'];
+
+        $expected = hash_hmac(
+            'sha256',
+            implode('|', ['2.00', 'SC-SUM', 'siti-sum@x.my', 'Siti Aminah', '12']),
+            $this->secret
+        );
+
+        $this->assertSame(
+            $expected,
+            $this->sdk->createSaveCardChecksumValue($this->secret, $data, 'Siti Aminah', 'siti-sum@x.my')
+        );
+    }
+
+    public function test_save_card_checksum_uses_the_given_customer_not_the_payer_in_data(): void
+    {
+        $data = [
+            'order_number' => 'SC-SUM', 'amount' => '2.00', 'payment_channel' => 12,
+            'payer_name' => 'Someone Else', 'payer_email' => 'else@x.my',
+        ];
+
+        $this->assertSame(
+            $this->expected(['amount' => '2.00', 'order_number' => 'SC-SUM', 'payer_email' => 'siti-sum@x.my', 'payer_name' => 'Siti Aminah', 'payment_channel' => '12']),
+            $this->sdk->createSaveCardChecksumValue($this->secret, $data, 'Siti Aminah', 'siti-sum@x.my')
+        );
+    }
+
+    public function test_save_card_checksum_keeps_the_name_as_stored(): void
+    {
+        $data = ['order_number' => 'SC-SUM', 'amount' => '2.00'];
+
+        $this->assertSame(
+            $this->expected(['amount' => '2.00', 'order_number' => 'SC-SUM', 'payer_email' => 'siti-sum@x.my', 'payer_name' => " Siti  Aminah' ", 'payment_channel' => '12']),
+            $this->sdk->createSaveCardChecksumValue($this->secret, $data, " Siti  Aminah' ", 'siti-sum@x.my')
+        );
+    }
 }

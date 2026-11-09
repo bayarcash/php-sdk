@@ -42,6 +42,21 @@ trait ChecksumGenerator
 	    return hash_hmac('sha256', $payloadString, $secretKey);
     }
 
+    /**
+     * Checksum for saveCard(): the payer is the customer, so pass the customer's
+     * full name and email as stored (getCustomer($id)->fullName / ->email), not
+     * cleaned or trimmed. `payment_channel` is 12 (Credit Card) when left out.
+     * The checksum is optional: leave it out of the body instead if you prefer.
+     */
+    public function createSaveCardChecksumValue($secretKey, array $data, string $customerFullName, string $customerEmail)
+    {
+        $data['payment_channel'] = $data['payment_channel'] ?? 12;
+        $data['payer_name'] = $customerFullName;
+        $data['payer_email'] = $customerEmail;
+
+        return $this->createPaymentIntentChecksumValue($secretKey, $data);
+    }
+
     public function createFpxDirectDebitEnrolmentChecksumValue($secretKey, $data)
     {
         $payload = [

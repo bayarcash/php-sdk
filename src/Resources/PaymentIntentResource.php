@@ -22,6 +22,9 @@ class PaymentIntentResource extends Resource
     public ?string $currency = null;
     public ?array $attempts = null;
 
+    /** Save-card intents only: `capture` or `validate_only`; null on any other intent. */
+    public ?string $tokenize = null;
+
     public function __construct(array $attributes, ?Bayarcash $bayarcash = null)
     {
         $qr = $attributes['duitnow_qr'] ?? null;

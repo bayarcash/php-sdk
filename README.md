@@ -28,6 +28,7 @@ The [Bayarcash](https://bayarcash.com/) SDK provides an expressive interface for
 - [Portals & FPX Banks](#portals--fpx-banks)
 - [Error Handling](#error-handling)
 - [Response Objects](#response-objects)
+- [Boost Recurring Payments](#boost-recurring-payments-v3-api-only)
 - [Security Recommendations](#security-recommendations)
 - [Support](#support)
 
@@ -277,6 +278,9 @@ Fpx::STATUS_FAILED;     // 2
 Fpx::STATUS_SUCCESS;    // 3
 Fpx::STATUS_CANCELLED;  // 4
 Fpx::STATUS_ABANDONED;  // 5
+Fpx::STATUS_AUTHORIZED; // 6 - card authorized, no money moved
+Fpx::STATUS_VOID;       // 7
+Fpx::STATUS_REFUND;     // 8
 
 if ((int) $callbackData['status'] === Fpx::STATUS_SUCCESS) {
     // Payment successful
@@ -284,6 +288,10 @@ if ((int) $callbackData['status'] === Fpx::STATUS_SUCCESS) {
 
 echo Fpx::getStatusText((int) $callbackData['status']); // e.g. "Successful"
 ```
+
+A `validate_only` save-card (see [Boost Recurring Payments](#boost-recurring-payments-v3-api-only))
+succeeds with status `6` (`Fpx::STATUS_AUTHORIZED`) in its callback, not `3`: the card is authorized
+and saved, no money moves.
 
 ## Transactions
 
@@ -305,8 +313,9 @@ $result = $bayarcash->getAllTransactions([
     'payer_email'               => 'ahmad@example.com',
 ]);
 // $result['data'] => TransactionResource[], $result['meta'] => pagination meta
+// 'recurring_type' => 'on_demand' | 'subscription' | 'installment' narrows the list to recurring charges
 
-$byOrder   = $bayarcash->getTransactionByOrderNumber('INV-1001');
+$byOrder   = $bayarcash->getTransactionByOrderNumber('INV-1001'); // TransactionResource[]
 $byEmail   = $bayarcash->getTransactionsByPayerEmail('ahmad@example.com');
 $byStatus  = $bayarcash->getTransactionsByStatus('3');
 $byChannel = $bayarcash->getTransactionsByPaymentChannel(Bayarcash::FPX);
@@ -520,6 +529,7 @@ use Bayarcash\Exceptions\ValidationException;
 use Bayarcash\Exceptions\FailedActionException;
 use Bayarcash\Exceptions\NotFoundException;
 use Bayarcash\Exceptions\RateLimitExceededException;
+use Bayarcash\Exceptions\ApiErrorException;
 
 try {
     $paymentIntent = $bayarcash->createPaymentIntent($data);
@@ -534,6 +544,11 @@ try {
 } catch (FailedActionException $e) {
     // 400 — request failed
     $message = $e->getMessage();
+} catch (ApiErrorException $e) {
+    // any other error status: 401, 403, 409, 5xx, a 504 page from a proxy, ...
+    $status = $e->status();    // also $e->getCode()
+    $code   = $e->errorCode(); // `error.code` of {"error": {"code", ...}}, or null
+    $body   = $e->body();      // also $e->getMessage(): the raw body
 }
 ```
 
@@ -543,6 +558,7 @@ try {
 | `FailedActionException` | 400 | Request failed. `->getMessage()` has the reason. |
 | `NotFoundException` | 404 | Resource not found. |
 | `RateLimitExceededException` | 429 | Rate limited. `->rateLimitResetsAt` holds the reset time. |
+| `ApiErrorException` | any other (401, 403, 409, 5xx, ...) | `->getMessage()` / `->body()` is the raw body, `->status()` / `->getCode()` the HTTP status, `->errors()` the decoded JSON (or `[]`), `->errorCode()` the `error.code` (or null). Extends `\Exception`. |
 | `TimeoutException` | — | Thrown by the optional `retry()` helper after a timeout. |
 
 ## Response Objects
@@ -578,6 +594,259 @@ Any missing field is `null`. Convert a resource (including nested resources) to 
 
 ```php
 $transaction->toArray();
+```
+
+## Boost Recurring Payments (V3 API only)
+
+> Requires `$bayarcash->setApiVersion('v3')`. A subscription or installment is created at the
+> provider, `pending`, and comes back with `redirectUrl` — the provider's card page. Redirect
+> the buyer there: the agreement is `active` once they complete it and the first charge is
+> taken at that moment. An on-demand payment charges the saved card synchronously and returns
+> the charge. Your checkout holds the recurring consent (there is no Bayarcash page); the
+> card processor reviews every merchant before switching recurring on (`403` until then).
+>
+> Ids: customers `rcus_`, plans `rpln_`, subscriptions `rsub_`, installments `rins_`,
+> charges `trx_`.
+>
+> Creating a subscription, an installment or an on-demand charge requires your own `reference`
+> (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type, forever, case-insensitive: `INV-1`
+> and `inv-1` are the same reference). A reference already on
+> file — any body, any state — throws `ValidationException` (`422 reference_already_used`, "The
+> reference X already exists."); the record on file is never returned. Do not repeat a create to
+> learn its outcome: read it. A first call the provider did not settle in time answers `202`: an
+> agreement as itself, `pending`, without `redirectUrl`; an on-demand charge with no charge record yet,
+> only `reference` and `status` the string `pending` (`id` is null).
+>
+> Every recurring call waits 90 seconds, `saveCard()` 120 (or your `setTimeout()` when larger; the
+> one-off calls keep `setTimeout()`, 30 by default), so your own PHP and proxy limits must allow 90
+> seconds (120 for `saveCard()`). A create
+> can still take longer: an on-demand charge with `customer_id` about 90 seconds, a create with an
+> inline `customer` up to 227 seconds (on-demand) or 182 seconds (subscription, installment).
+> **A timeout or a transport error on a create is the same as a `202`**: the record may already
+> exist and an on-demand card may already have been charged. Then:
+>
+> - Subscription / installment: `getSubscription($id)` / `getInstallment($id)` with the 202's id,
+>   or `getSubscriptions(['reference' => ...])` / `getInstallments(['reference' => ...])` when no
+>   answer arrived at all. While it reads `pending` it carries `redirectUrl`; the card page lives
+>   20 minutes from `createdAt`. After that an installment needs a new create (with a new
+>   reference); a subscription must be canceled first (`cancelSubscription()`), or left until it
+>   reads `expired` (about 30 minutes after creation) — see "one subscription per customer per plan".
+> - On-demand charge: `getAllTransactions(['order_number' => $reference, 'recurring_type' => 'on_demand'])`
+>   (`data` holds `TransactionResource`) once it is booked, or the charge callback. **After a `202`
+>   the card may already have been charged.** Wait for the callback or read the charge BEFORE ever charging again under a new
+>   reference — otherwise the customer can be charged twice. Right after the `202` an empty answer
+>   is not yet proof: Bayarcash's background check first asks about the charge 15 minutes after it
+>   was recorded, then every 5 minutes, so it is usually booked within about 20 minutes; it can
+>   take longer while the exchange is unreachable or has not settled the charge. Rely on the
+>   callback: charge again under a new reference only once the callback says the charge failed,
+>   or that lookup still finds nothing well after that.
+>
+> **A `401`, `403` or `429`, or a `502` whose body's `error.code` is `upstream_auth`, on a create
+> is not a `202`**: nothing was created and no card was charged. Send it again under a **new**
+> reference. After a `429`, wait a short while first: the SDK does not expose `Retry-After`, and
+> `->rateLimitResetsAt` is set only when the API sends `X-RateLimit-Reset` (null otherwise). A
+> `429` throws `RateLimitExceededException`; a `401`, `403`, `409` or `5xx` throws
+> `ApiErrorException` (an `\Exception`) whose message is the API's body, with `->status()` and
+> `->errorCode()` (`error.code`, e.g. `upstream_auth`).
+>
+> A `409` `upstream_conflict` on a create is not a `202` either: the provider refused it for the
+> current state and nothing was created; on an update, re-read the record before trying again.
+> **Any other `5xx` on a create, including a `504` page from a proxy, is the same as a timeout**:
+> read the outcome as above.
+>
+> One subscription per customer per plan: while the customer holds one to the plan that has not
+> ended (`pending` — including one still being created — `active` or `paused`), a new
+> `createSubscription()` for the same customer and plan throws `ValidationException` (`422
+> customer_already_subscribed`, "The customer is already subscribed to this plan."), as the
+> provider itself refuses it. Cancel the existing one first; one still being created must settle
+> first. Installments have no plan and are not affected.
+>
+> None of these send an `Idempotency-Key`, and neither do customers, plans or saved cards. A
+> customer email you already hold is a `422 customer_email_exists`: find it with
+> `getCustomers(['search' => $email])`; when that finds none, the email is held at the provider
+> outside your records — contact support. A plan requires your own `code`
+> (the same rule as `reference`: `PLAN-1` and `plan-1` are the same code); a code already on file is a `422 plan_code_already_used`, and
+> `getPlans(['code' => ...])` finds the plan. Every `saveCard()` call makes a new card link:
+> creating one charges nothing, but every link is payable, so with `capture` two paid links are two
+> sales. After a timeout, look the intent up with `getPaymentIntent()` if you have its id, or create
+> a new one and send the payer only the newest link.
+
+```php
+use Bayarcash\BoostRecurring;
+use Bayarcash\Fpx;
+
+$bayarcash->setApiVersion('v3');
+
+// Customers — a known email throws ValidationException (422 customer_email_exists)
+$customer = $bayarcash->createCustomer([
+    'full_name' => 'Jane Doe',
+    'email'     => 'jane@example.com',
+    'phone'     => '60123456789',
+]);
+$customers = $bayarcash->getCustomers(['search' => 'jane', 'per_page' => 50]); // ['data','meta','links']
+$customer  = $bayarcash->getCustomer('rcus_xxx');
+// Save a card: a Credit Card payment intent (the createPaymentIntent body less the payer, who is
+// the customer) plus `tokenize`
+//   capture       - charge the amount and save the card (minimum 2.00)
+//   validate_only - authorize the amount and save the card, no money moves (minimum 1.00)
+$saveCard  = $bayarcash->saveCard('rcus_xxx', [
+    'portal_key'             => 'your_portal_key',
+    'order_number'           => 'CARD-0001',
+    'amount'                 => '1.00',
+    'tokenize'               => 'validate_only',
+]); // PaymentIntentResource; payment_channel defaults to 12 (Credit Card)
+// Optional checksum: it is checked against the customer's name and email, so pass
+// getCustomer($id)->fullName / ->email to createSaveCardChecksumValue(), or omit the checksum:
+//   $data['checksum'] = $bayarcash->createSaveCardChecksumValue($apiSecretKey, $data, $customer->fullName, $customer->email);
+// url is the provider's card page: redirect at once. It lives 30 minutes and is used once.
+// If it cannot be started, saveCard() throws ApiErrorException: 403 save_card_refused or 502
+// save_card_failed (->errorCode()), the message being the JSON body
+// {"error": {"code", "message", "payment_intent_id"}}.
+header('Location: ' . $saveCard->url);
+// Later: $bayarcash->getPaymentIntent($saveCard->id)->status is 'authorized' (validate_only) or 'paid' (capture);
+// a validate_only callback succeeds with status 6 (Fpx::STATUS_AUTHORIZED), not 3
+
+// Plans — interval is day|week|month|year
+$plan = $bayarcash->createPlan([
+    'code' => 'PRO-MONTHLY', // required; your own plan code, unique forever (->code)
+    'name' => 'Pro', 'description' => 'Pro plan',
+    'price' => 49.90, 'currency' => 'MYR', 'interval' => BoostRecurring::INTERVAL_MONTHLY, // 'month'
+]);
+$plan = $bayarcash->updatePlan('rpln_xxx', ['price' => 59.90]);
+
+// Subscriptions — created at the provider, pending; redirect the buyer to ->redirectUrl
+$subscription = $bayarcash->createSubscription([
+    'portal_key'  => 'your-portal-key',   // required; the portal must have the card channel
+    'reference'   => 'SUB-0001',          // required; your own id, unique forever
+    'customer_id' => 'rcus_xxx',          // or inline: 'customer' => ['full_name','email','phone']
+    'plan_id'     => 'rpln_xxx',
+    'start_date'  => date('c', strtotime('+1 day')), // ISO-8601 timestamp, an hour or more ahead
+    'callback_url'=> 'https://merchant/webhook',
+    'return_url'  => 'https://merchant/return',
+]);
+if ($subscription->redirectUrl) {
+    header('Location: ' . $subscription->redirectUrl); // the provider's card page, lives 20 minutes
+} else {
+    // 202: not settled in time - read it later with getSubscription($subscription->id) while pending.
+}
+// Lost the answer altogether (a timeout or a transport error)? Do not create it again; read it:
+// $bayarcash->getSubscriptions(['reference' => 'SUB-0001'])
+// The customer already holds a subscription to this plan that has not ended: ValidationException
+// (422 customer_already_subscribed) - cancel that one first.
+
+$subscription = $bayarcash->getSubscription('rsub_xxx'); // ->plan holds the plan it bills on
+$bayarcash->pauseSubscription('rsub_xxx');
+$bayarcash->resumeSubscription('rsub_xxx');
+$bayarcash->cancelSubscription('rsub_xxx');
+
+// Installments — the same: pending, with the card page
+$installment = $bayarcash->createInstallment([
+    'portal_key'        => 'your-portal-key',
+    'reference'         => 'INS-0001',
+    'customer_id'       => 'rcus_xxx',
+    'total_amount'      => 1200.00,
+    'interval'          => BoostRecurring::INTERVAL_MONTHLY,
+    'installment_count' => 12,
+    'description'       => 'Laptop, 12 payments', // required, up to 500 characters
+    'start_date'        => date('c', strtotime('+1 day')),
+    'callback_url'      => 'https://merchant/webhook',
+    'return_url'        => 'https://merchant/return',
+]);
+if ($installment->redirectUrl) {
+    header('Location: ' . $installment->redirectUrl);
+} else {
+    // 202: not settled in time - read it later with getInstallment($installment->id) while pending.
+}
+// Lost the answer altogether? $bayarcash->getInstallments(['reference' => 'INS-0001'])
+
+// On-demand charge on a saved card — synchronous, the answer is the charge (no return_url)
+$charge = $bayarcash->createOnDemandPayment([
+    'portal_key'  => 'your-portal-key',
+    'reference'   => 'INV-1042',      // unique forever: a repeat is a 422 reference_already_used
+    'customer_id' => 'rcus_xxx',
+    'amount'      => 25.00,
+    'description' => 'Wallet top up', // letters, digits, spaces, full stops, hyphens
+]); // ->orderNumber is your reference, ->exchangeReferenceNumber the BPGR- reference
+if ($charge->status === 'pending') {
+    // 202: no charge record yet, only ->reference, but the card may already have been charged.
+    // A timeout or a transport error on this call means the same. Do not repeat, and never charge
+    // again under a new reference before you know: wait for the charge callback, or read
+    // $bayarcash->getAllTransactions(['order_number' => 'INV-1042', 'recurring_type' => 'on_demand'])['data'].
+    // Usually booked within about 20 minutes, longer while the exchange is unreachable or has not settled
+    // it: charge under a new reference only once the callback says it failed, or still empty well after that.
+}
+$charge->status == Fpx::STATUS_SUCCESS; // 3 charged, 2 declined, 1 still settling (callback follows)
+// A customer with no saved card throws ValidationException (422 customer_no_saved_card): saveCard() first.
+
+// Back on your return_url after the card page: the agreement's state, signed with your API secret key
+// (recurring_type, status, customer_id, subscription_id, installment_id, transaction_id,
+// exchange_reference_number, exchange_transaction_id, currency, amount, transaction_status,
+// transaction_status_description + datetime + checksum). Verify before trusting status.
+if (! $bayarcash->verifyRecurringReturnUrlData($_GET, $apiSecretKey)) {
+    http_response_code(400); // someone typed a URL: act on nothing in it
+    exit;
+}
+// status is the agreement's: pending|active|failed|expired|canceled... The transaction_* fields
+// are the first charge, '' until it is booked (its callback lands seconds before or after you).
+// The rule: verify, then read the agreement by id, then act. recurring_type says which one it is:
+$agreement = $_GET['recurring_type'] === 'installment'
+    ? $bayarcash->getInstallment($_GET['installment_id'])
+    : $bayarcash->getSubscription($_GET['subscription_id']);
+// A buyer who closes the card page never lands here: the first-charge callback still tells you
+// when they enrolled, and the agreement reads `expired` 30 minutes after a create nobody finished.
+
+// Charges are transaction records (TransactionResource, same shape as getTransaction()),
+// paginated: ['data' => TransactionResource[], 'meta' => [...], 'links' => [...]]
+$page = $bayarcash->getCustomerPayments('rcus_xxx', 1, 50); // the only list with on-demand charges
+$page = $bayarcash->getSubscriptionPayments('rsub_xxx');    // page = 1, per_page = 15 (max 100)
+$page = $bayarcash->getInstallmentPayments('rins_xxx', 2, 100);
+
+foreach ($page['data'] as $charge) {
+    $charge->id;                    // trx_...
+    $charge->status == Fpx::STATUS_SUCCESS; // 3 successful, 2 failed, 1 pending
+    $charge->exchangeTransactionId; // the provider charge id
+    $charge->createdAt;             // 'Y-m-d H:i:s', Kuala Lumpur time
+    $charge->recurringCustomerId;   // rcus_...
+    $charge->subscription;          // array (with 'plan') on a subscription charge, else null
+    $charge->installment;           // array on an installment charge, else null
+}
+
+$charge = $bayarcash->getPayment('trx_xxx'); // or the provider charge id
+```
+
+Status constants: `BoostRecurring::STATUS_PENDING|STATUS_ACTIVE|STATUS_PAUSED|STATUS_CANCELED|STATUS_EXPIRED|STATUS_TERMINATED|STATUS_FAILED|STATUS_COMPLETED`
+(American spelling `canceled`). `failed` is an enrolment whose card was declined on the card
+page; `expired` one nobody completed within 30 minutes of creation; `completed` is for
+installments only - every instalment collected (a subscription ends as `canceled` or
+`terminated`). `BoostRecurring::isTerminalStatus()` is true for `canceled`, `expired`,
+`terminated`, `failed` and `completed`; `getStatusText()` labels each. Charge statuses use the
+transaction codes in `Fpx::STATUS_*`.
+
+### Recurring webhook
+
+There is one: the **charge callback**, `record_type` `recurring_charge`, form-encoded on the
+`callback_url` given at enrolment (or on the on-demand payment), signed with your API secret key
+(ksort, `implode('|')`, HMAC-SHA256). It is sent for **every** charge — subscription,
+installment, on-demand, the first charge of an enrolment included — on **every change of its
+status**: pending (`1`), then successful (`3`) or failed (`2`). The first charge callback is the
+activation signal; it can land before or after the buyer reaches your `return_url`. A declined
+first charge arrives as a failed charge callback and the agreement then reads `failed`. There is
+no agreement lifecycle webhook: a pause, a cancel, an `expired` agreement are read with
+`getSubscription()` / `getInstallment()`.
+
+Signed fields: the 13 transaction-callback fields (`record_type`, `transaction_id`,
+`exchange_reference_number`, `exchange_transaction_id`, `order_number`, `currency`, `amount`,
+`payer_name`, `payer_email`, `payer_bank_name`, `status`, `status_description`, `datetime`) plus
+`charge_source`, `subscription_id`, `installment_id`, `customer_id` and the card the charge ran
+on: `card_brand`, `card_country`, `card_last4`, `card_exp_month`, `card_exp_year` (never a token;
+absent when the provider named no card). `payer_telephone_number` and `payment_gateway_id` are
+sent but not signed. Form encoding drops null fields while the checksum signs them as `''`; the
+verifier rebuilds the fixed field list, so pass the request body as you received it.
+
+```php
+$data = $request->all();
+
+$valid = $bayarcash->verifyRecurringChargeCallbackData($data, API_SECRET_KEY);
 ```
 
 ## Security Recommendations

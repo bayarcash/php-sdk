@@ -2,6 +2,110 @@
 
 All notable changes to `bayarcash/php-sdk` will be documented in this file.
 
+## Unreleased
+### Added
+- Boost recurring payment support (v3 only):
+  - Customers: `createCustomer`, `getCustomers`, `getCustomer`, `saveCard`
+  - Plans: `createPlan`, `getPlans`, `getPlan`, `updatePlan`
+  - Subscriptions: `createSubscription`, `getSubscriptions`, `getSubscription`, `updateSubscription`, `getSubscriptionPayments`, plus `pauseSubscription`/`resumeSubscription`/`cancelSubscription`/`terminateSubscription`
+  - Installments: `createInstallment`, `getInstallments`, `getInstallment`, `updateInstallment`, `getInstallmentPayments`, plus `pauseInstallment`/`resumeInstallment`/`cancelInstallment`/`terminateInstallment`
+  - On-demand payments: `createOnDemandPayment`, `getPayment`
+  - `BoostRecurring` status/type/interval constants and label helpers
+- Recurring test suite (`tests/Recurring`, PHPUnit + Guzzle MockHandler).
+- `getAllTransactions()` accepts `recurring_type` (`on_demand`, `subscription` or `installment`); with `order_number`
+  it is the lookup after an on-demand 202.
+- Every recurring call waits 90 seconds, or `setTimeout()` when larger; the one-off endpoints keep `setTimeout()`
+  (30 by default). Your own PHP and proxy limits must allow 90 seconds. A create can still take longer (an on-demand
+  charge with `customer_id` about 90 seconds; a create with an inline `customer` up to 227 seconds on-demand, 182
+  seconds for a subscription or installment). A timeout or a transport error on a create is the same as a 202: the
+  record may already exist and an on-demand card may already have been charged, so read the outcome (the callback,
+  `getSubscription()` / `getInstallment()` / `getSubscriptions(['reference' => ...])`, or the on-demand lookup above)
+  and never charge again under a new reference until it says so.
+- `getCustomerPayments($customerId, $page, $perPage)` — every charge for a customer, including on-demand charges.
+- `verifyRecurringChargeCallbackData()` for the recurring charge callback — the only recurring webhook, sent for
+  every charge on every status change; it signs the card the charge ran on (`card_brand`, `card_country`,
+  `card_last4`, `card_exp_month`, `card_exp_year`).
+- `verifyRecurringReturnUrlData()` for the signed landing on the recurring `return_url` (twelve fields + datetime + checksum).
+- `SubscriptionResource` / `InstallmentResource`: `redirectUrl` (the provider's card page, on every answer while the
+  agreement is `pending`; null on a create's 202 until the provider has answered; the page lives 20 minutes from
+  `createdAt`) and `card['country']`. `BoostRecurring::STATUS_EXPIRED` (nobody completed the card page), terminal and labelled.
+- `TransactionResource`: `recurringCustomerId`, `subscription`, `installment`, and the fields the API already
+  answered undeclared (a dynamic property, deprecated on PHP 8.2+): `platformFees`, `nettAmount`, `transactionType`,
+  `applicationReason`, `paymentIntentId`. `SubscriptionResource`: `plan`.
+- `PlanResource::$code` — the merchant's own plan code. `getPlans(['code' => ...])` and
+  `getSubscriptions(['reference' => ...])` / `getInstallments(['reference' => ...])` find a record by the merchant's
+  id (list filters are passed through as given).
+- `BoostRecurring::STATUS_FAILED` and `STATUS_COMPLETED` (installments only); both count in `isTerminalStatus()`
+  and have a `getStatusText()` label.
+- `Fpx::STATUS_AUTHORIZED` (6), `Fpx::STATUS_VOID` (7) and `Fpx::STATUS_REFUND` (8) with `getStatusText()` labels; a `validate_only` save-card callback succeeds with 6.
+- `Bayarcash\Exceptions\ApiErrorException` (extends `\Exception`) for every error status without its own exception (401, 403, 409, 5xx, a 504 proxy page): the message is still the raw body, `getCode()` / `status()` is the HTTP status, plus `body()`, `errors()` and `errorCode()` (`error.code`, e.g. `save_card_refused`, `upstream_conflict`).
+- `createSaveCardChecksumValue($secretKey, $data, $customerFullName, $customerEmail)` — the optional `saveCard()` checksum, signed with the customer's name and email as stored and `payment_channel` 12 when left out.
+
+### Changed
+- **Breaking:** `createSubscription()` / `createInstallment()` create the agreement at the provider and return the
+  `pending` `SubscriptionResource` / `InstallmentResource` with `redirectUrl` — redirect the buyer there — instead
+  of a recurring intent with `url`. `createOnDemandPayment()` charges the saved card synchronously and returns the
+  charge as a `TransactionResource` (no `return_url`); a customer with no saved card is a 422 `customer_no_saved_card`.
+- **Breaking:** `saveCard($customerId, array $data)` creates a Credit Card payment intent that
+  also saves the card: `$data` is the `createPaymentIntent()` body less the payer plus `tokenize` (`capture`, minimum
+  2.00, or `validate_only`, minimum 1.00). The payer's name, email and phone come off the customer record. It returns a `PaymentIntentResource` — redirect to `->url` — instead of
+  `['payment_url' => ...]`. `url` is the provider's card page (30 minutes, used once; the checkout does not open a
+  save-card intent); a card page that cannot be started is a 403 `save_card_refused` or 502 `save_card_failed`. `PaymentIntentResource` gains `tokenize`; a `validate_only` intent reads `authorized`.
+- **Breaking:** `createCustomer(array $data)`, `createPlan(array $data)` and `saveCard($customerId, array $data)` take
+  no Idempotency-Key and send none (the protected `idempotencyHeaders()` / `generateIdempotencyKey()` helpers are
+  gone; a key passed as an extra positional argument is ignored, but a named `idempotencyKey:` argument now
+  throws PHP's `Error` "Unknown named parameter $idempotencyKey" - drop it). A known customer email is a 422
+  `customer_email_exists`; when `getCustomers(['search' => $email])` finds none, the email is held at the provider
+  outside your records - contact support.
+  `createPlan()` requires the merchant's own `code` (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant forever,
+  case-insensitive: `PLAN-1` and `plan-1` are the same code);
+  a code on file is a 422 `plan_code_already_used`. Every `saveCard()` call makes a new card link: with `capture`
+  two paid links are two sales, so after a timeout look the intent up or send the payer only the newest link.
+  `createPaymentIntent()` keeps its optional key.
+- `createSubscription()`, `createInstallment()` and `createOnDemandPayment()` require a merchant `reference` in
+  `$data` (up to 36 of `A-Z a-z 0-9 _ -`, unique per merchant per type forever, case-insensitive: `INV-1` and `inv-1`
+  are the same reference; the API validates it). A reference
+  already on file — any body, any state — is a 422 `reference_already_used` ("The reference X already exists.",
+  `ValidationException`); the record on file is never answered back. A first call not settled in time answers 202:
+  an agreement as itself, `pending`, without `redirectUrl` (read it with `getSubscription()` / `getInstallment()`);
+  an on-demand 202 is no charge record yet, a `TransactionResource` holding only `reference` and `status` the string
+  `pending` (`id` null). The card may already have been charged: wait for the charge callback, or read the charge
+  with `getAllTransactions(['order_number' => $reference, 'recurring_type' => 'on_demand'])` (`data` holds
+  `TransactionResource`) once booked, BEFORE ever charging again under a new reference — otherwise the customer can
+  be charged twice. Right after the 202 an empty
+  answer is not yet proof (Bayarcash's background check first asks 15 minutes after the charge was recorded, then
+  every 5 minutes), so it is usually booked within about 20 minutes; it can take longer while the exchange is unreachable
+  or has not settled the charge. Rely on the callback: charge again under a new reference only once the callback says
+  the charge failed, or that lookup still finds nothing well after that. A 401, 403, 429, or a 502 `upstream_auth`, on a
+  create is not a 202: nothing was created and no card was charged, so send it again under a new reference (after a
+  429, wait a short while first; `->rateLimitResetsAt` is null unless the API sends `X-RateLimit-Reset`). `SubscriptionResource` /
+  `InstallmentResource` / `TransactionResource` gain `reference`; a booked charge answers it as `orderNumber`.
+- **Breaking:** `createOnDemandPayment(array $data)` no longer takes `$idempotencyKey` and sends no `Idempotency-Key`:
+  the `reference` dedupes the charge. A key passed as a second positional argument is ignored; a named
+  `idempotencyKey:` argument now throws PHP's `Error` "Unknown named parameter $idempotencyKey".
+- **Breaking:** `createSubscription(array $data)` / `createInstallment(array $data)` take no Idempotency-Key and
+  send none: every create is a new agreement, billed only once the payer authorizes it on the card page. A key
+  passed as a second positional argument is ignored; a named `idempotencyKey:` argument now throws (as above).
+- `createSubscription()`: a customer already holding a subscription to the plan that has not ended (`pending`,
+  including one still being created, `active` or `paused`) is a 422 `customer_already_subscribed` ("The customer is
+  already subscribed to this plan.", `ValidationException`), as the provider itself refuses it: cancel the existing
+  one first (`cancelSubscription()`); one still being created must settle first, or wait until it reads `expired`.
+- `BoostRecurring::INTERVAL_*` are now `day`/`week`/`month`/`year` (the API rejects ISO durations).
+- `saveCard()` waits 120 seconds, or `setTimeout()` when larger; the other recurring calls stay at 90.
+- **Breaking:** `getPayment()` returns a `TransactionResource`; `getSubscriptionPayments()` / `getInstallmentPayments()`
+  return a paginated `['data' => TransactionResource[], 'meta', 'links']` and take `$page` / `$perPage`.
+- **Breaking:** `getSubscription()` / `getInstallment()` no longer carry `->charges` (the API stopped embedding them).
+
+### Removed
+- `RecurringIntentResource`, `getRecurringIntent()` and `verifyRecurringLifecycleCallbackData()` — there are no
+  recurring intents and no lifecycle webhook; an agreement's state is read with `getSubscription()` / `getInstallment()`.
+- `PaymentResource`, `ChargeResource` and the `BoostRecurring::PAYMENT_*` constants — charges are transaction records,
+  whose status is the `Fpx::STATUS_*` code.
+
+### Fixed
+- `getTransactionByOrderNumber()` and `getTransactionsByStatus()` URL-encode their value, so an order number or
+  status containing `&`, `#`, `+` or a space is sent as given.
+
 ## 3.2.2 - 2026-11-02
 
 ### Fixed
