@@ -13,7 +13,7 @@ class SubscriptionResource extends Resource
     public ?string $planId = null;
     /** The plan it bills on, in the plan resource's shape (raw array). */
     public ?array $plan = null;
-    /** pending, active, paused, canceled, expired, terminated or failed (see BoostRecurring::STATUS_*). */
+    /** pending, active, paused, canceled, expired, terminated or failed (see Recurring::STATUS_*). */
     public ?string $status = null;
     /** Why it is paused: payment_failed, merchant or provider. Null when not paused. */
     public ?string $pausedReason = null;

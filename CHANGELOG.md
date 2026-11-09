@@ -4,13 +4,13 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
 
 ## Unreleased
 ### Added
-- Boost recurring payment support (v3 only):
+- Recurring payment support (v3 only):
   - Customers: `createCustomer`, `getCustomers`, `getCustomer`, `saveCard`
   - Plans: `createPlan`, `getPlans`, `getPlan`, `updatePlan`
   - Subscriptions: `createSubscription`, `getSubscriptions`, `getSubscription`, `updateSubscription`, `getSubscriptionPayments`, plus `pauseSubscription`/`resumeSubscription`/`cancelSubscription`/`terminateSubscription`
   - Installments: `createInstallment`, `getInstallments`, `getInstallment`, `updateInstallment`, `getInstallmentPayments`, plus `pauseInstallment`/`resumeInstallment`/`cancelInstallment`/`terminateInstallment`
   - On-demand payments: `createOnDemandPayment`, `getPayment`
-  - `BoostRecurring` status/type/interval constants and label helpers
+  - `Recurring` status/type/interval constants and label helpers
 - Recurring test suite (`tests/Recurring`, PHPUnit + Guzzle MockHandler).
 - `getAllTransactions()` accepts `recurring_type` (`on_demand`, `subscription` or `installment`); with `order_number`
   it is the lookup after an on-demand 202.
@@ -28,20 +28,21 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
 - `verifyRecurringReturnUrlData()` for the signed landing on the recurring `return_url` (twelve fields + datetime + checksum).
 - `SubscriptionResource` / `InstallmentResource`: `redirectUrl` (the provider's card page, on every answer while the
   agreement is `pending`; null on a create's 202 until the provider has answered; the page lives 20 minutes from
-  `createdAt`) and `card['country']`. `BoostRecurring::STATUS_EXPIRED` (nobody completed the card page), terminal and labelled.
+  `createdAt`) and `card['country']`. `Recurring::STATUS_EXPIRED` (nobody completed the card page), terminal and labelled.
 - `TransactionResource`: `recurringCustomerId`, `subscription`, `installment`, and the fields the API already
   answered undeclared (a dynamic property, deprecated on PHP 8.2+): `platformFees`, `nettAmount`, `transactionType`,
   `applicationReason`, `paymentIntentId`. `SubscriptionResource`: `plan`.
 - `PlanResource::$code` — the merchant's own plan code. `getPlans(['code' => ...])` and
   `getSubscriptions(['reference' => ...])` / `getInstallments(['reference' => ...])` find a record by the merchant's
   id (list filters are passed through as given).
-- `BoostRecurring::STATUS_FAILED` and `STATUS_COMPLETED` (installments only); both count in `isTerminalStatus()`
+- `Recurring::STATUS_FAILED` and `STATUS_COMPLETED` (installments only); both count in `isTerminalStatus()`
   and have a `getStatusText()` label.
 - `Fpx::STATUS_AUTHORIZED` (6), `Fpx::STATUS_VOID` (7) and `Fpx::STATUS_REFUND` (8) with `getStatusText()` labels; a `validate_only` save-card callback succeeds with 6.
 - `Bayarcash\Exceptions\ApiErrorException` (extends `\Exception`) for every error status without its own exception (401, 403, 409, 5xx, a 504 proxy page): the message is still the raw body, `getCode()` / `status()` is the HTTP status, plus `body()`, `errors()` and `errorCode()` (`error.code`, e.g. `save_card_refused`, `upstream_conflict`).
 - `createSaveCardChecksumValue($secretKey, $data, $customerFullName, $customerEmail)` — the optional `saveCard()` checksum, signed with the customer's name and email as stored and `payment_channel` 12 when left out.
 
 ### Changed
+- Recurring helpers are named `Recurring` (unreleased draft name was `BoostRecurring`).
 - **Breaking:** `createSubscription()` / `createInstallment()` create the agreement at the provider and return the
   `pending` `SubscriptionResource` / `InstallmentResource` with `redirectUrl` — redirect the buyer there — instead
   of a recurring intent with `url`. `createOnDemandPayment()` charges the saved card synchronously and returns the
@@ -90,7 +91,7 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
   including one still being created, `active` or `paused`) is a 422 `customer_already_subscribed` ("The customer is
   already subscribed to this plan.", `ValidationException`), as the provider itself refuses it: cancel the existing
   one first (`cancelSubscription()`); one still being created must settle first, or wait until it reads `expired`.
-- `BoostRecurring::INTERVAL_*` are now `day`/`week`/`month`/`year` (the API rejects ISO durations).
+- `Recurring::INTERVAL_*` are now `day`/`week`/`month`/`year` (the API rejects ISO durations).
 - `saveCard()` waits 120 seconds, or `setTimeout()` when larger; the other recurring calls stay at 90.
 - **Breaking:** `getPayment()` returns a `TransactionResource`; `getSubscriptionPayments()` / `getInstallmentPayments()`
   return a paginated `['data' => TransactionResource[], 'meta', 'links']` and take `$page` / `$perPage`.
@@ -99,7 +100,7 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
 ### Removed
 - `RecurringIntentResource`, `getRecurringIntent()` and `verifyRecurringLifecycleCallbackData()` — there are no
   recurring intents and no lifecycle webhook; an agreement's state is read with `getSubscription()` / `getInstallment()`.
-- `PaymentResource`, `ChargeResource` and the `BoostRecurring::PAYMENT_*` constants — charges are transaction records,
+- `PaymentResource`, `ChargeResource` and the `Recurring::PAYMENT_*` constants — charges are transaction records,
   whose status is the `Fpx::STATUS_*` code.
 
 ### Fixed

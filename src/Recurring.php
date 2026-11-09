@@ -2,7 +2,7 @@
 
 namespace Bayarcash;
 
-class BoostRecurring
+class Recurring
 {
     /*
      * Recurring agreement types (`recurring_type` on the return_url landing) and the

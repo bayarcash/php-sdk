@@ -15,7 +15,7 @@ class SubscriptionTest extends TestCase
             $this->json([
                 'type' => 'subscription', 'id' => 'rsub_1', 'portal_key' => 'pk_test_portal',
                 'status' => 'pending', 'customer_id' => 'rcus_1', 'plan_id' => 'rpln_1',
-                'card' => null, 'redirect_url' => 'https://boost.example/card/abc',
+                'card' => null, 'redirect_url' => 'https://provider.example/card/abc',
             ], 201),
         ]);
 
@@ -32,7 +32,7 @@ class SubscriptionTest extends TestCase
         $this->assertSame('rsub_1', $subscription->id);
         $this->assertSame('pending', $subscription->status);
         $this->assertSame('pk_test_portal', $subscription->portalKey);
-        $this->assertSame('https://boost.example/card/abc', $subscription->redirectUrl);
+        $this->assertSame('https://provider.example/card/abc', $subscription->redirectUrl);
         $this->assertSame('POST', $this->lastRequest()->getMethod());
         $this->assertStringContainsString('subscriptions', (string) $this->lastRequest()->getUri());
         $this->assertSame('rpln_1', $this->lastBody()['plan_id']);
@@ -167,7 +167,7 @@ class SubscriptionTest extends TestCase
 
     /*
      * The API takes no Idempotency-Key on an agreement create: every create is a new
-     * agreement, and the payer still has to authorize it on Boost's card page.
+     * agreement, and the payer still has to authorize it on the provider's card page.
      */
     public function test_create_subscription_sends_no_idempotency_key(): void
     {
@@ -199,7 +199,7 @@ class SubscriptionTest extends TestCase
 
     /*
      * A repeated reference is refused, whatever the body and whatever state the agreement on
-     * file is in (owner 2026-11-04, following Boost): 422 reference_already_used, nothing
+     * file is in (owner 2026-11-04): 422 reference_already_used, nothing
      * sent to the provider. It is not answered with the agreement on file.
      */
     public function test_a_repeated_reference_is_a_validation_exception(): void
@@ -231,9 +231,9 @@ class SubscriptionTest extends TestCase
         $bayarcash = $this->sdk([
             $this->json(['id' => 'rsub_1', 'reference' => 'SUB-0001', 'status' => 'pending'], 202),
             $this->json(['id' => 'rsub_1', 'reference' => 'SUB-0001', 'status' => 'pending',
-                'redirect_url' => 'https://boost.example/card/abc'], 200),
+                'redirect_url' => 'https://provider.example/card/abc'], 200),
             $this->json(['data' => [['id' => 'rsub_1', 'reference' => 'SUB-0001', 'status' => 'pending',
-                'redirect_url' => 'https://boost.example/card/abc']], 'meta' => ['total' => 1]], 200),
+                'redirect_url' => 'https://provider.example/card/abc']], 'meta' => ['total' => 1]], 200),
         ]);
 
         $created = $bayarcash->createSubscription([
@@ -243,10 +243,10 @@ class SubscriptionTest extends TestCase
         $this->assertNull($created->redirectUrl);
 
         $read = $bayarcash->getSubscription($created->id);
-        $this->assertSame('https://boost.example/card/abc', $read->redirectUrl);
+        $this->assertSame('https://provider.example/card/abc', $read->redirectUrl);
 
         $found = $bayarcash->getSubscriptions(['reference' => 'SUB-0001']);
         $this->assertStringContainsString('reference=SUB-0001', (string) $this->lastRequest()->getUri());
-        $this->assertSame('https://boost.example/card/abc', $found['data'][0]->redirectUrl);
+        $this->assertSame('https://provider.example/card/abc', $found['data'][0]->redirectUrl);
     }
 }
