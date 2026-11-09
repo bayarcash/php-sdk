@@ -42,7 +42,6 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
 - `createSaveCardChecksumValue($secretKey, $data, $customerFullName, $customerEmail)` — the optional `saveCard()` checksum, signed with the customer's name and email as stored and `payment_channel` 12 when left out.
 
 ### Changed
-- Recurring helpers are named `Recurring` (unreleased draft name was `BoostRecurring`).
 - **Breaking:** `createSubscription()` / `createInstallment()` create the agreement at the provider and return the
   `pending` `SubscriptionResource` / `InstallmentResource` with `redirectUrl` — redirect the buyer there — instead
   of a recurring intent with `url`. `createOnDemandPayment()` charges the saved card synchronously and returns the
