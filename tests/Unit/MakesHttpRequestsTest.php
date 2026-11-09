@@ -9,6 +9,7 @@ use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use Bayarcash\Bayarcash;
+use Bayarcash\Exceptions\ApiErrorException;
 use Bayarcash\Exceptions\FailedActionException;
 use Bayarcash\Exceptions\NotFoundException;
 use Bayarcash\Exceptions\RateLimitExceededException;
@@ -112,6 +113,96 @@ class MakesHttpRequestsTest extends TestCase
         } catch (RateLimitExceededException $e) {
             $this->assertSame(1700000000, $e->rateLimitResetsAt);
         }
+    }
+
+    /** Send one request answered with $response and return the ApiErrorException it throws. */
+    private function apiError(Response $response): ApiErrorException
+    {
+        try {
+            $this->sdkWithResponses([$response])->post('anything');
+        } catch (ApiErrorException $e) {
+            return $e;
+        }
+
+        $this->fail('Expected ApiErrorException');
+    }
+
+    public function test_401_throws_api_error_exception(): void
+    {
+        $body = json_encode(['message' => 'Unauthenticated.']);
+        $e = $this->apiError(new Response(401, [], $body));
+
+        $this->assertInstanceOf(\Exception::class, $e);
+        $this->assertSame(401, $e->status());
+        $this->assertSame(401, $e->getCode());
+        $this->assertSame($body, $e->getMessage());
+        $this->assertSame($body, $e->body());
+        $this->assertSame(['message' => 'Unauthenticated.'], $e->errors());
+        $this->assertNull($e->errorCode());
+    }
+
+    public function test_403_save_card_refused_carries_the_error_code(): void
+    {
+        $body = json_encode(['error' => [
+            'code' => 'save_card_refused',
+            'message' => 'Credit Card is not enabled for this portal.',
+            'payment_intent_id' => 'pi_1',
+        ]]);
+        $e = $this->apiError(new Response(403, [], $body));
+
+        $this->assertInstanceOf(\Exception::class, $e);
+        $this->assertSame(403, $e->status());
+        $this->assertSame(403, $e->getCode());
+        $this->assertSame($body, $e->getMessage());
+        $this->assertSame('save_card_refused', $e->errorCode());
+        $this->assertSame('pi_1', $e->errors()['error']['payment_intent_id']);
+    }
+
+    public function test_409_upstream_conflict_carries_the_error_code(): void
+    {
+        $e = $this->apiError(new Response(409, [], json_encode(['error' => [
+            'code' => 'upstream_conflict',
+            'message' => 'The provider refused the change.',
+        ]])));
+
+        $this->assertInstanceOf(\Exception::class, $e);
+        $this->assertSame(409, $e->status());
+        $this->assertSame('upstream_conflict', $e->errorCode());
+    }
+
+    public function test_502_carries_the_error_code(): void
+    {
+        $e = $this->apiError(new Response(502, [], json_encode(['error' => [
+            'code' => 'save_card_failed',
+            'message' => 'The card page could not be started.',
+            'payment_intent_id' => 'pi_1',
+        ]])));
+
+        $this->assertInstanceOf(\Exception::class, $e);
+        $this->assertSame(502, $e->status());
+        $this->assertSame(502, $e->getCode());
+        $this->assertSame('save_card_failed', $e->errorCode());
+    }
+
+    public function test_504_html_page_throws_api_error_exception_with_the_raw_body(): void
+    {
+        $html = '<html><head><title>504 Gateway Time-out</title></head><body>504 Gateway Time-out</body></html>';
+        $e = $this->apiError(new Response(504, ['Content-Type' => 'text/html'], $html));
+
+        $this->assertInstanceOf(\Exception::class, $e);
+        $this->assertSame(504, $e->status());
+        $this->assertSame(504, $e->getCode());
+        $this->assertSame($html, $e->getMessage());
+        $this->assertSame([], $e->errors());
+        $this->assertNull($e->errorCode());
+    }
+
+    public function test_a_string_error_key_has_no_error_code(): void
+    {
+        $e = $this->apiError(new Response(500, [], json_encode(['error' => 'Server Error'])));
+
+        $this->assertSame(500, $e->status());
+        $this->assertNull($e->errorCode());
     }
 
     public function test_api_version_getter_defaults_to_v2_and_reflects_setter(): void

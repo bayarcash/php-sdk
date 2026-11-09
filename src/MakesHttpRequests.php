@@ -2,6 +2,7 @@
 
 namespace Bayarcash;
 
+use Bayarcash\Exceptions\ApiErrorException;
 use Bayarcash\Exceptions\FailedActionException;
 use Bayarcash\Exceptions\NotFoundException;
 use Bayarcash\Exceptions\RateLimitExceededException;
@@ -108,6 +109,7 @@ trait MakesHttpRequests
      * Handle the request error.
      *
      * @param ResponseInterface $response
+     * @throws ApiErrorException
      * @throws FailedActionException
      * @throws NotFoundException
      * @throws RateLimitExceededException
@@ -139,7 +141,7 @@ trait MakesHttpRequests
             );
         }
 
-        throw new \Exception((string) $response->getBody());
+        throw new ApiErrorException($response->getStatusCode(), (string) $response->getBody());
     }
 
     /**

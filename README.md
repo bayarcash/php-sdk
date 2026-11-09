@@ -529,6 +529,7 @@ use Bayarcash\Exceptions\ValidationException;
 use Bayarcash\Exceptions\FailedActionException;
 use Bayarcash\Exceptions\NotFoundException;
 use Bayarcash\Exceptions\RateLimitExceededException;
+use Bayarcash\Exceptions\ApiErrorException;
 
 try {
     $paymentIntent = $bayarcash->createPaymentIntent($data);
@@ -543,6 +544,11 @@ try {
 } catch (FailedActionException $e) {
     // 400 — request failed
     $message = $e->getMessage();
+} catch (ApiErrorException $e) {
+    // any other error status: 401, 403, 409, 5xx, a 504 page from a proxy, ...
+    $status = $e->status();    // also $e->getCode()
+    $code   = $e->errorCode(); // `error.code` of {"error": {"code", ...}}, or null
+    $body   = $e->body();      // also $e->getMessage(): the raw body
 }
 ```
 
@@ -552,6 +558,7 @@ try {
 | `FailedActionException` | 400 | Request failed. `->getMessage()` has the reason. |
 | `NotFoundException` | 404 | Resource not found. |
 | `RateLimitExceededException` | 429 | Rate limited. `->rateLimitResetsAt` holds the reset time. |
+| `ApiErrorException` | any other (401, 403, 409, 5xx, ...) | `->getMessage()` / `->body()` is the raw body, `->status()` / `->getCode()` the HTTP status, `->errors()` the decoded JSON (or `[]`), `->errorCode()` the `error.code` (or null). Extends `\Exception`. |
 | `TimeoutException` | — | Thrown by the optional `retry()` helper after a timeout. |
 
 ## Response Objects
@@ -638,8 +645,14 @@ $transaction->toArray();
 > is not a `202`**: nothing was created and no card was charged. Send it again under a **new**
 > reference. After a `429`, wait a short while first: the SDK does not expose `Retry-After`, and
 > `->rateLimitResetsAt` is set only when the API sends `X-RateLimit-Reset` (null otherwise). A
-> `401`, `403` or `502` throws `\Exception` whose message is the API's body; a `429` throws
-> `RateLimitExceededException`.
+> `429` throws `RateLimitExceededException`; a `401`, `403`, `409` or `5xx` throws
+> `ApiErrorException` (an `\Exception`) whose message is the API's body, with `->status()` and
+> `->errorCode()` (`error.code`, e.g. `upstream_auth`).
+>
+> A `409` `upstream_conflict` on a create is not a `202` either: the provider refused it for the
+> current state and nothing was created; on an update, re-read the record before trying again.
+> **Any other `5xx` on a create, including a `504` page from a proxy, is the same as a timeout**:
+> read the outcome as above.
 >
 > One subscription per customer per plan: while the customer holds one to the plan that has not
 > ended (`pending` — including one still being created — `active` or `paused`), a new
@@ -683,8 +696,9 @@ $saveCard  = $bayarcash->saveCard('rcus_xxx', [
     'tokenize'               => 'validate_only',
 ]); // PaymentIntentResource; payment_channel defaults to 12 (Credit Card)
 // url is the provider's card page: redirect at once. It lives 30 minutes and is used once.
-// If it cannot be started, saveCard() throws: 403 save_card_refused or 502 save_card_failed, the
-// message being the JSON body {"error": {"code", "message", "payment_intent_id"}}.
+// If it cannot be started, saveCard() throws ApiErrorException: 403 save_card_refused or 502
+// save_card_failed (->errorCode()), the message being the JSON body
+// {"error": {"code", "message", "payment_intent_id"}}.
 header('Location: ' . $saveCard->url);
 // Later: $bayarcash->getPaymentIntent($saveCard->id)->status is 'authorized' (validate_only) or 'paid' (capture);
 // a validate_only callback succeeds with status 6 (Fpx::STATUS_AUTHORIZED), not 3

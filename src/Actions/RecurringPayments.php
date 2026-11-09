@@ -52,8 +52,15 @@ use Bayarcash\Resources\TransactionResource;
  * create is not a 202: nothing was created and no card was charged. Send it
  * again under a NEW reference. After a 429, wait a short while first: the SDK
  * does not expose Retry-After, and ->rateLimitResetsAt is set only when the API
- * sends X-RateLimit-Reset (null otherwise). A 401, 403 or 502 throws \Exception
- * whose message is the API's body; a 429 throws RateLimitExceededException.
+ * sends X-RateLimit-Reset (null otherwise). A 429 throws
+ * RateLimitExceededException; a 401, 403, 409 or 5xx throws ApiErrorException
+ * (an \Exception) whose message is the API's body, with ->status() and
+ * ->errorCode() (`error.code`, e.g. `upstream_auth`).
+ *
+ * A 409 `upstream_conflict` on a create is not a 202 either: the provider
+ * refused it for the current state and nothing was created; on an update,
+ * re-read the record before trying again. Any other 5xx on a create, including
+ * a 504 page from a proxy, is the same as a timeout: read the outcome as above.
  *
  * After an on-demand 202 (or timeout) the card may already have been charged:
  * wait for the callback or read the charge BEFORE ever charging again under a
@@ -136,7 +143,8 @@ trait RecurringPayments
      * When the card page cannot be started the API answers 403
      * (`save_card_refused`, with the reason) or 502 (`save_card_failed`, retry
      * with a new call), as `{"error": {"code", "message", "payment_intent_id"}}`.
-     * This SDK throws both as an \Exception whose message is that JSON body.
+     * This SDK throws both as ApiErrorException (an \Exception) whose message is
+     * that JSON body; ->errorCode() is the `code`.
      *
      * `$data` is the createPaymentIntent() body less the payer (portal_key,
      * order_number, amount, optional checksum, ...) plus the required
