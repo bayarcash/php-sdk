@@ -106,6 +106,11 @@ All notable changes to `bayarcash/php-sdk` will be documented in this file.
 - `getTransactionByOrderNumber()` and `getTransactionsByStatus()` URL-encode their value, so an order number or
   status containing `&`, `#`, `+` or a space is sent as given.
 
+## 3.2.2 - 2026-11-02
+
+### Fixed
+- `verifyDirectDebitTransactionCallbackData()` now includes the signed `payment_gateway_id` field, so real deduction callbacks pass verification.
+
 ## 3.2.1 - 2026-11-01
 
 ### Added
