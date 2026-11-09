@@ -278,6 +278,9 @@ Fpx::STATUS_FAILED;     // 2
 Fpx::STATUS_SUCCESS;    // 3
 Fpx::STATUS_CANCELLED;  // 4
 Fpx::STATUS_ABANDONED;  // 5
+Fpx::STATUS_AUTHORIZED; // 6 - card authorized, no money moved
+Fpx::STATUS_VOID;       // 7
+Fpx::STATUS_REFUND;     // 8
 
 if ((int) $callbackData['status'] === Fpx::STATUS_SUCCESS) {
     // Payment successful
@@ -285,6 +288,10 @@ if ((int) $callbackData['status'] === Fpx::STATUS_SUCCESS) {
 
 echo Fpx::getStatusText((int) $callbackData['status']); // e.g. "Successful"
 ```
+
+A `validate_only` save-card (see [Boost Recurring Payments](#boost-recurring-payments-v3-api-only))
+succeeds with status `6` (`Fpx::STATUS_AUTHORIZED`) in its callback, not `3`: the card is authorized
+and saved, no money moves.
 
 ## Transactions
 
@@ -679,7 +686,8 @@ $saveCard  = $bayarcash->saveCard('rcus_xxx', [
 // If it cannot be started, saveCard() throws: 403 save_card_refused or 502 save_card_failed, the
 // message being the JSON body {"error": {"code", "message", "payment_intent_id"}}.
 header('Location: ' . $saveCard->url);
-// Later: $bayarcash->getPaymentIntent($saveCard->id)->status is 'authorized' (validate_only) or 'paid' (capture)
+// Later: $bayarcash->getPaymentIntent($saveCard->id)->status is 'authorized' (validate_only) or 'paid' (capture);
+// a validate_only callback succeeds with status 6 (Fpx::STATUS_AUTHORIZED), not 3
 
 // Plans — interval is day|week|month|year
 $plan = $bayarcash->createPlan([

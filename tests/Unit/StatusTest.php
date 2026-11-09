@@ -16,6 +16,14 @@ class StatusTest extends TestCase
         $this->assertSame('Abandoned', Dobw::getStatusText(Dobw::STATUS_ABANDONED));
     }
 
+    public function test_card_statuses_match_the_console(): void
+    {
+        $this->assertSame([6, 7, 8], [Fpx::STATUS_AUTHORIZED, Fpx::STATUS_VOID, Fpx::STATUS_REFUND]);
+        $this->assertSame('Authorized', Fpx::getStatusText(6));
+        $this->assertSame('Void', Fpx::getStatusText(7));
+        $this->assertSame('Refund', Fpx::getStatusText(8));
+    }
+
     public function test_mandate_statuses_match_the_gateway(): void
     {
         $this->assertSame(9, FpxDirectDebit::STATUS_EXPIRED);
@@ -31,6 +39,6 @@ class StatusTest extends TestCase
     public function test_an_unknown_code_is_named_as_such(): void
     {
         $this->assertSame('UNKNOWN STATUS', FpxDirectDebit::getStatusText(11));
-        $this->assertSame('UNKNOWN STATUS', Fpx::getStatusText(6));
+        $this->assertSame('UNKNOWN STATUS', Fpx::getStatusText(99));
     }
 }
